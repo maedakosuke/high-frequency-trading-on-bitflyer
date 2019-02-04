@@ -205,7 +205,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     
     # dict orderbook
     def __write_orderbook(self, orderbook):
-        now = datetime.now().timestamp()
+        now = datetime.now(timezone('UTC')).timestamp()
         bids = orderbook['bids']
         asks = orderbook['asks']
 #        mid_price = orderbook['mid_price']
