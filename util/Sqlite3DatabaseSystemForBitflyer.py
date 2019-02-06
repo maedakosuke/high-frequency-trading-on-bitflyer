@@ -169,7 +169,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # dict execusions
     def __write_execusions(self, execusions):
         statement = '''insert into execusions (id, exec_date, side, price, size)
-                       values (:id, :side, :price, :exec_date, :size);'''
+                       values (:id, :exec_date, :side, :price, :size);'''
         for execusion in execusions:
  #           print(str(execusion))
             record = {
@@ -305,13 +305,13 @@ if __name__ == '__main__':
 #    dbsystem.add_message_to_db(ticker_sample)
 
     # 約定履歴読み込みテスト
-    t1 = time_as_datetime('2019-02-03 02:30:00.000000') # UTF時刻
-    t2 = time_as_datetime('2019-02-03 02:31:00.000000')
+    t1 = time_as_datetime('2019-02-01 02:30:00.000000') # UTC timezone
+    t2 = time_as_datetime('2019-02-10 02:31:00.000000')
     execusions_dict = dbsystem.read_execusions_filtered_by_exec_date(t1, t2)
 
     # bids, asks読み込みテスト
-    t1 = time_as_datetime('2019-02-03 10:30:00.000000') # JTC時刻
-    t2 = time_as_datetime('2019-02-03 12:31:00.000000')
+    t1 = time_as_datetime('2019-02-01 10:30:00.000000') # UTC timezone
+    t2 = time_as_datetime('2019-02-10 12:31:00.000000')
     bids_dict = dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
     asks_dict = dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
 
