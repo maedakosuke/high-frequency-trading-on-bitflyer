@@ -36,8 +36,8 @@ class BitflyerRealtimeMessenger:
             self.__ws = websocket.WebSocketApp(
                 'wss://ws.lightstream.bitflyer.com/json-rpc',
                 on_message = self.__on_message,
-                on_error = self.__on_close_and_error,
-                on_close = self.__on_close_and_error
+                on_error = self.__on_error,
+                on_close = self.__on_close
             )
             self.__ws.on_open = self.__on_open
     
@@ -58,13 +58,16 @@ class BitflyerRealtimeMessenger:
             print(e.args)
     
     
-    def __on_close_and_error(self, ws, error):
-        print(format(error))
+    def __on_error(self, ws, error):
+        print('on_error called')
+        print(error)
         self.__latest_working_time = datetime.now()
-        ws.close
-        self.__dbsystem.close_database()
+#        ws.close
 #        sys.exit(1)
-        pass
+
+
+    def __on_close(self, ws):
+        print('close websocket connection')
 
 
     def __on_open(self, ws):
