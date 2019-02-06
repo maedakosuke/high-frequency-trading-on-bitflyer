@@ -53,11 +53,11 @@ class BitflyerExchange:
     # 約定した場合は約定結果のdictを返す
     # 簡単のためにdictではなくboolを返す
     def limit_order(self, side, price, size):
-        if side == 'BUY':
+        if side == 0:
             # buy limit orderなので上限以下のasksを参照する
             # 指値より安く買える場合は約定する
             df =  self.asks[(self.asks['price']<=price) & (self.asks['size']>0)]
-        elif side == 'SELL':
+        else:
             # sell limit orderなので下限以上のbidsを参照する
             # 指値より高く売れる場合は約定する
             df = self.bids[(self.bids['price']>=price) & (self.bids['size']>0)]
@@ -73,13 +73,14 @@ if __name__ == '__main__':
     dbfile_path = 'C:/workspace/test.sqlite3'
     exchange = BitflyerExchange(dbfile_path)
 
-    t1 = myutil.time_as_datetime('2019-02-03 02:30:00.000000') # UTF時刻
-    t2 = myutil.time_as_datetime('2019-02-03 02:31:00.000000')
-    execusions_dict = exchange.get_execusions(t1, t2)
+    # execusions読み込みテスト
+    t1 = myutil.time_as_datetime('2019-02-01 02:30:00.000000') # UTC timezone
+    t2 = myutil.time_as_datetime('2019-02-10 02:31:00.000000')
+    execusions = exchange.get_execusions(t1, t2)
 
     # bids, asks構成テスト
-    t1 = myutil.time_as_datetime('2019-02-03 10:30:00.000000') # JTC時刻
-    t2 = myutil.time_as_datetime('2019-02-03 12:31:00.000000')
+    t1 = myutil.time_as_datetime('2019-02-01 10:30:00.000000') # UTC timezzone
+    t2 = myutil.time_as_datetime('2019-02-10 12:31:00.000000')
     exchange.reconstruct_bids(t1, t2)
     exchange.reconstruct_asks(t1, t2)
     bids = exchange.bids
