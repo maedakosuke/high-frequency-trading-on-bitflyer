@@ -260,7 +260,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def __write_ticker(self, ticker):
         statement = '''
             insert into ticker (tick_id, timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product)
-            values (:tick_id, :timestamp, :best_bid, :best_ask, :best_bid_size, :best_ask_size, :total_bid_depth, :total_ask_depth, :ltp, :volume, :volume_by_product)            
+            values (:tick_id, :timestamp, :best_bid, :best_ask, :best_bid_size, :best_ask_size, :total_bid_depth, :total_ask_depth, :ltp, :volume, :volume_by_product);
         '''
         record = {
             'tick_id': ticker['tick_id'],
@@ -276,6 +276,20 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             'volume_by_product': ticker['volume_by_product']
         }
         self.query(statement, record) 
+
+
+    # datetime t
+    def read_latest_ticker(self, t):
+        statement = '''
+            select * from ticker 
+            where timestamp <= :timestamp order by timestamp desc limit 1;
+        '''
+        statement = '''
+            select * from ticker
+        '''
+#        return self.query(statement, {'timestamp': t.timestamp()})
+        return self.query(statement)
+
 
 
 
@@ -315,6 +329,7 @@ if __name__ == '__main__':
     bids_dict = dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
     asks_dict = dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
 
-
-
-    
+    # best_bid, best_ask読み込みテスト
+    t = time_as_datetime('2019-02-10 10:30:00.000000') # UTC timezone
+    ticker_dict = dbsystem.read_latest_ticker(t)
+        

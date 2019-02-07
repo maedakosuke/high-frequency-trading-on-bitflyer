@@ -67,6 +67,12 @@ class BitflyerExchange:
         return df['size'].sum() >= size
         
 
+    # 時刻tより過去の最も新しいティッカーを返す
+    def get_latest_ticker(self, t):
+        ticker = self.__dbsystem.read_latest_ticker(t)
+        return pd.DataFrame(ticker)
+
+
 
 
 if __name__ == '__main__':
@@ -88,4 +94,8 @@ if __name__ == '__main__':
 
     # 指値注文テスト    
     is_execusion_success = exchange.limit_order('BUY', 376000, 0.01)
+
+    # ticker読み込みテスト
+    t = myutil.time_as_datetime('2019-02-10 10:30:00.000000') # UTC timezzone
+    ticker = exchange.get_latest_ticker(t)
     
