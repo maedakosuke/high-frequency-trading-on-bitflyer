@@ -65,9 +65,10 @@ class BitflyerRealtimeMessenger:
     
     def __on_error(self, ws, error):
         print('%s __on_error %s' % (self.__channel, error))
-        self.__latest_working_time = tu.now_as_unixtime()
-#        ws.close()
-#        sys.exit(1)
+        self.stop_websocket_thread()
+        tu.sleep(10)
+        self.__initialize_websocket()
+        self.start_websocket_thread()
 
 
     def __on_close(self, ws):

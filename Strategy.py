@@ -33,6 +33,7 @@ class Strategy:
         delta_d = abs(buy_size**0.5 - sell_size**0.5)
         # フィルタを通らない場合は注文しない
         if delta_d <= self.params['orderfilter']:
+            print('delta_d <= orderfileter')
             return
         # return value
         position = {
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     position = strategy.order(t)
     
     import numpy as np
-    dt = 1000
+    dt = 60
     for i, t in enumerate(np.arange(tmin, tmax, dt)):
         print('%s: %s' % (i, t))
         position = strategy.order(t)

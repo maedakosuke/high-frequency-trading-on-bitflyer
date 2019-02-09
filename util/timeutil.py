@@ -27,24 +27,31 @@ def text_to_unixtime(time_as_text):
 
 # 現在時刻をUTCタイムゾーンのunixtimeで返す    
 def now_as_unixtime():
-    return datetime.now(timezone('UTC')).timestamp()
+    #return datetime.now('UTC').timestamp()  # timestamp()するとJSTの時刻になっている
+    return datetime.utcnow().timestamp()
 
 
 # 現在時刻をJSTタイムゾーン文字列で返す
-def now_as_text():
-    return str(datetime.now(timezone('Asia/Tokyo')))
+def now_as_text(area='Asia/Tokyo'):
+    return str(datetime.now(timezone(area)))
     
     
 
 if __name__ == '__main__':
 
     t1 = time_as_unixtime('2019-01-01 00:00:00.123456')
+    print(t1)
     
     # bitflyerの時刻文字列をunixtimeに変換する
-    t2 = text_to_unixtime('2019-01-01T00:00:00.1234567Z')
+    t2 = text_to_unixtime('2019-02-09T17:33:00.1234567Z')
+    print(t2)
     
     # 現在時刻をUTCのunixtimeで返す
     t3 = now_as_unixtime()
+    print(t3)
     
     # 現在時刻を文字列で返す
-    t4 = now_as_text()
+    t4 = now_as_text()  # JST
+    print(t4)
+    t5 = now_as_text('UTC')  # UTC
+    print(t5)
