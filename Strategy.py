@@ -7,11 +7,8 @@ mmbotxxxのストラテジーを移植する
 
 """
 
-from datetime import datetime
-from datetime import timedelta
-from pyz import timezone
 from BitflyerExchange import BitflyerExchange
-import pandas as pd
+#import pandas as pd
 
 class Strategy:
     def __init__(self, sqlite3_file_path):
@@ -19,13 +16,15 @@ class Strategy:
         self.params = {}
 #        self.position = {}
 
-    # 時刻tでの指値side, price, sizeを決定する
-    # datetime t
+    # unixtime tでの指値side, price, sizeを決定する
     # 約定した場合はポジションを返す
     def order(self, t):
         # 過去deltatime[sec]間のbuy/sellのサイズを集計する
-        t_dt_ago = t - timedelta(seconds=self.params['deltatime'])
+        t_dt_ago = t - self.params['deltatime']
         execusions = self.__exchange.get_execusions(t_dt_ago, t)
+        if execusions.empty:
+            print('execusions is empty')
+            return
         buy_size = execusions[execusions['side']==0]['size'].sum()
         sell_size = execusions[execusions['side']==1]['size'].sum()
         # buyとsellの2乗差の絶対値を計算する
@@ -81,5 +80,8 @@ if __name__ == '__main__':
     }
 
     exchange = BitflyerExchange(dbfile_path)
-    tmin, tmax = exchange.get_timestamp_range_of_ticker()
+    tmin, tmax = exchange.get_time_range_of_ticker()
+    
+    t = (tmin + tmax) / 2
+    position = strategy.order(t)
     

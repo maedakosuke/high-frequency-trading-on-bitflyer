@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from datetime import datetime
+import util.timeutil as tu
 import json
-from pytz import timezone
-import sys
-from time import sleep
-
 import websocket
 import threading
 
@@ -50,8 +46,8 @@ class BitflyerRealtimeMessenger:
     # start RealtimeAPI for volume check
     def __on_message(self, ws, message):
         try:
-            print('on_message() called: %s' % datetime.now())
-            self.__latest_working_time = datetime.now()
+            print('on_message() called: %s' % tu.now_as_text())
+            self.__latest_working_time = tu.now_as_unixtime()
             message_dict = json.loads(message)
             self.__dbsystem.add_message_to_db(message_dict)
         except Exception as e:
@@ -61,7 +57,7 @@ class BitflyerRealtimeMessenger:
     def __on_error(self, ws, error):
         print('on_error called')
         print(error)
-        self.__latest_working_time = datetime.now()
+        self.__latest_working_time = tu.now_as_unixtime()
 #        ws.close
 #        sys.exit(1)
 
@@ -109,5 +105,5 @@ if __name__ == '__main__':
 #    ticker_messenger.stop_websocket_thread()
     
     while(True):
-        sleep(1)
+        tu.sleep(1)
         

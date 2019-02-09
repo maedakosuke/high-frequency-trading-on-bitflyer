@@ -1,26 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import sqlite3
-from datetime import datetime
 import threading
-from pytz import timezone
-
-
-# utility functions
-
-# bitFlyerが提供している時刻はUTCだから日本時間JSTより-09:00の時刻になっている
-# データベースにはUTCの時刻のままtimestamp()にした値を書き込む
-
-# change str time format
-def uniform_my_standard_time_format(time_as_text):
-    # 'yyyy-mm-ddThh:nn:ss.abcdefgZ' to 'yyyy-mm-dd hh:nn:ss.abcdef'
-    t = time_as_text.replace('T', ' ')
-    return t[:-2]
-    
-
-# convert str to datetime
-def time_as_datetime(time_as_text):
-    return datetime.strptime(time_as_text, '%Y-%m-%d %H:%M:%S.%f')
+import util.timeutil as tu
 
 
 def buy0_sell1(text):
@@ -29,7 +11,7 @@ def buy0_sell1(text):
     elif text == 'SELL':
         return 1
     else:
-        return -1  # itayose
+        return -1  # 板寄せ
 
 
 def dict_factory(cursor, row):
@@ -40,16 +22,8 @@ def dict_factory(cursor, row):
 
 
 class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
-    # member variables
-    # __db_file_path
-    # __connection
-    # __cursor    
-
     def __init__(self, db_file_path):
         self.__db_file_path = db_file_path
-
-#        self.__connection = sqlite3.connect(self.__db_file_path, check_same_thread=False)
-#        self.__cursor = self.__connection.cursor()
 
         # create tables if not exist
         self.__create_execusions_table()
@@ -57,13 +31,6 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         self.__create_asks_table()
         self.__create_ticker_table()
         
-
-#    def run(self):
-        
-
-#    def close_database(self):
-#        self.__connection.close()
-
 
     # str statement, dict arg
     def query(self, statement, arg=None):
@@ -179,7 +146,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
  #           print(str(execusion))
             record = {
                 'id': execusion['id'],
-                'exec_date': time_as_datetime(uniform_my_standard_time_format(execusion['exec_date'])).timestamp(),
+                'exec_date': tu.text_to_unixtime(execusion['exec_date']),
                 'side': buy0_sell1(execusion['side']),
                 'price': execusion['price'],
                 'size': execusion['size']
@@ -187,11 +154,11 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             self.query(statement, record)
 
 
-    # datetime t1, t2
+    # unixtime t1, t2
     def read_execusions_filtered_by_exec_date(self, t1, t2):
         condition = {
-            'exec_date1': t1.timestamp(),
-            'exec_date2': t2.timestamp()
+            'exec_date1': t1,
+            'exec_date2': t2
         }
         statement = '''
             select id, exec_date, side, price, size from execusions 
@@ -213,10 +180,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     
     # dict orderbook
     def __write_orderbook(self, orderbook):
-        now = datetime.now(timezone('UTC')).timestamp()
+        now = tu.now_as_unixtime()
         bids = orderbook['bids']
         asks = orderbook['asks']
-#        mid_price = orderbook['mid_price']
+        # orderbook['mid_price']はtickerと重複するので記憶しない
 
         for bid in bids:
             record = {
@@ -237,11 +204,11 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
     # 最新のbids(asks)をセレクトして返す
     # str table_name ('bids' or 'asks')
-    # datetime t1, t2
+    # unixtime t1, t2
     def __select_from_latest_bids_or_asks(self, table_name, t1, t2):
         condition = {
-            'get_date1': t1.timestamp(),
-            'get_date2': t2.timestamp()
+            'get_date1': t1,
+            'get_date2': t2
         }
         # bids/asksテーブルにはスナップショットと差分情報を格納している
         # get_dateが新しいレコードを抽出して使うようにすれば最新の板情報となる
@@ -255,12 +222,12 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         return self.query(statement, condition)
         
 
-    # datetime t1, t2
+    # unixtime t1, t2
     def read_latest_bids_filtered_by_get_date(self, t1, t2):
         return self.__select_from_latest_bids_or_asks('bids', t1, t2)
 
 
-    # datetime t1, t2
+    # unixtime t1, t2
     def read_latest_asks_filtered_by_get_date(self, t1, t2):
         return self.__select_from_latest_bids_or_asks('asks', t1, t2)
 
@@ -275,7 +242,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         '''
         record = {
             'tick_id': ticker['tick_id'],
-            'timestamp': time_as_datetime(uniform_my_standard_time_format(ticker['timestamp'])).timestamp(),
+            'timestamp': tu.text_to_unixtime(ticker['timestamp']),
             'best_bid': ticker['best_bid'],
             'best_ask': ticker['best_ask'],
             'best_bid_size': ticker['best_bid_size'],
@@ -289,13 +256,13 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         self.query(statement, record) 
 
 
-    # datetime t
+    # unixtime t
     def read_latest_ticker(self, t):
         statement = '''
             select * from ticker 
             where timestamp <= :timestamp order by timestamp desc limit 1;
         '''
-        return self.query(statement, {'timestamp': t.timestamp()})
+        return self.query(statement, {'timestamp': t})
 
 
     def read_min_max_timestamp_of_ticker(self):
@@ -332,19 +299,19 @@ if __name__ == '__main__':
 #    dbsystem.add_message_to_db(ticker_sample)
 
     # 約定履歴読み込みテスト
-#    t1 = time_as_datetime('2019-02-01 02:30:00.000000') # UTC timezone
-#    t2 = time_as_datetime('2019-02-10 02:31:00.000000')
-#    execusions_dict = dbsystem.read_execusions_filtered_by_exec_date(t1, t2)
+    t1 = tu.time_as_unixtime('2019-02-01 02:30:00.000000') # UTC timezone
+    t2 = tu.time_as_unixtime('2019-02-10 02:31:00.000000')
+    execusions_dict = dbsystem.read_execusions_filtered_by_exec_date(t1, t2)
 
     # bids, asks読み込みテスト
-#    t1 = time_as_datetime('2019-02-01 10:30:00.000000') # UTC timezone
-#    t2 = time_as_datetime('2019-02-10 12:31:00.000000')
-#    bids_dict = dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
-#    asks_dict = dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
+    t1 = tu.time_as_unixtime('2019-02-01 10:30:00.000000') # UTC timezone
+    t2 = tu.time_as_unixtime('2019-02-10 12:31:00.000000')
+    bids_dict = dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
+    asks_dict = dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
 
     # best_bid, best_ask読み込みテスト
-#    t = time_as_datetime('2019-02-10 10:30:00.000000') # UTC timezone
-#    ticker_dict = dbsystem.read_latest_ticker(t)
+    t = tu.time_as_unixtime('2019-02-10 10:30:00.000000') # UTC timezone
+    ticker_dict = dbsystem.read_latest_ticker(t)
 
     # ティッカーのデータ所持時刻
     tminmax = dbsystem.read_min_max_timestamp_of_ticker()
