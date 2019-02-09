@@ -315,4 +315,4 @@ if __name__ == '__main__':
 
     # ティッカーのデータ所持時刻
     tminmax = dbsystem.read_min_max_timestamp_of_ticker()
-        
+    

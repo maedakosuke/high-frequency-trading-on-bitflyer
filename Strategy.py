@@ -25,6 +25,8 @@ class Strategy:
         if execusions.empty:
             print('execusions is empty')
             return
+        else:
+            print('execusions size: %s' % execusions.size)
         buy_size = execusions[execusions['side']==0]['size'].sum()
         sell_size = execusions[execusions['side']==1]['size'].sum()
         # buyとsellの2乗差の絶対値を計算する
@@ -40,6 +42,10 @@ class Strategy:
         }
         # latest ticker
         ticker = self.__exchange.get_latest_ticker(t)
+        # update bids, asks
+        self.__exchange.reconstruct_bids(0, t)
+        self.__exchange.reconstruct_asks(0, t)
+        
         if buy_size > sell_size:
             # 時刻tでのbest askを得る
             best_ask = ticker['best_ask'][0]
@@ -72,7 +78,7 @@ if __name__ == '__main__':
     strategy = Strategy(dbfile_path)
     strategy.params = {
         'ordersize': 0.01,
-        'deltatime': 5,
+        'deltatime': 60,
         'orderfilter': 1.0,
         'profitspread': 100,
         'orderbreak': 1,
@@ -85,3 +91,13 @@ if __name__ == '__main__':
     t = (tmin + tmax) / 2
     position = strategy.order(t)
     
+    import numpy as np
+    dt = 1000
+    for i, t in enumerate(np.arange(tmin, tmax, dt)):
+        print('%s: %s' % (i, t))
+        position = strategy.order(t)
+        print(str(position))
+        
+
+
+

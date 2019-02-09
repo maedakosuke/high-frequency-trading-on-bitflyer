@@ -30,6 +30,7 @@ class BitflyerExchange:
         self.bids = pd.DataFrame(
             self.__dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
         )
+        print('bids size: %s (%s - %s)' % (self.bids.size, t1, t2))
 
 
     # スナップショットと差分情報から時刻tの時点のbidsデータを構成する
@@ -38,6 +39,7 @@ class BitflyerExchange:
         self.asks = pd.DataFrame(
             self.__dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
         )
+        print('asks size: %s (%s - %s)' % (self.asks.size, t1, t2))
 
 
     # 指値注文を受け付ける
@@ -45,6 +47,10 @@ class BitflyerExchange:
     # 約定した場合は約定結果のdictを返す
     # 簡単のためにdictではなくboolを返す
     def limit_order(self, side, price, size):
+        if self.bids.empty or self.asks.empty:
+            print('bids / asks is empty')
+            return
+
         if side == 0:
             # buy limit orderなので上限以下のasksを参照する
             # 指値より安く買える場合は約定する
