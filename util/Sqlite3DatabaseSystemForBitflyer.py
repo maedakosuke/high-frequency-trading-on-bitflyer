@@ -71,6 +71,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             connection = sqlite3.connect(self.__db_file_path, check_same_thread=False)
             connection.row_factory = dict_factory  # use dict, not tupple
             cursor = connection.cursor()
+            statement = statement.strip()  # 両端の空白を消去する
             if arg is None:
                 cursor.execute(statement)
             else:
@@ -168,8 +169,12 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
     # dict execusions
     def __write_execusions(self, execusions):
-        statement = '''insert into execusions (id, exec_date, side, price, size)
-                       values (:id, :exec_date, :side, :price, :size);'''
+        statement = '''
+            insert into execusions 
+                (id, exec_date, side, price, size)
+            values 
+                (:id, :exec_date, :side, :price, :size);
+        '''
         for execusion in execusions:
  #           print(str(execusion))
             record = {
@@ -188,18 +193,21 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             'exec_date1': t1.timestamp(),
             'exec_date2': t2.timestamp()
         }
-        statement = '''select id, exec_date, side, price, size from execusions 
-                       where exec_date >= :exec_date1 and exec_date <= :exec_date2 
-                       order by id, exec_date;
-                    '''
+        statement = '''
+            select id, exec_date, side, price, size from execusions 
+            where exec_date >= :exec_date1 and exec_date <= :exec_date2 
+            order by id, exec_date;
+        '''
         return self.query(statement, condition)
 
     
     # str table_name ('bids' or 'asks')
     # dict record
     def __insert_into_bids_or_asks(self, table_name, record):
-        statement = '''insert into %s (get_date, price, size)
-        values (:get_date, :price, :size);''' % table_name
+        statement = '''
+            insert into %s (get_date, price, size)
+            values (:get_date, :price, :size);
+        ''' % table_name
         self.query(statement, record)
 
     
@@ -237,12 +245,13 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         }
         # bids/asksテーブルにはスナップショットと差分情報を格納している
         # get_dateが新しいレコードを抽出して使うようにすれば最新の板情報となる
-        statement = '''select get_date, price, size from (
-                           select * from %s where rowid in (
-                               select max(rowid) from %s group by price order by get_date
-                           )
-                       ) where get_date >= :get_date1 and get_date <= :get_date2 order by price;
-                    ''' % (table_name, table_name)
+        statement = '''
+            select get_date, price, size from (
+                select * from %s where rowid in (
+                    select max(rowid) from %s group by price order by get_date
+                )
+            ) where get_date >= :get_date1 and get_date <= :get_date2 order by price;
+        ''' % (table_name, table_name)
         return self.query(statement, condition)
         
 
@@ -259,8 +268,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # dict ticker
     def __write_ticker(self, ticker):
         statement = '''
-            insert into ticker (tick_id, timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product)
-            values (:tick_id, :timestamp, :best_bid, :best_ask, :best_bid_size, :best_ask_size, :total_bid_depth, :total_ask_depth, :ltp, :volume, :volume_by_product);
+            insert into ticker 
+                (tick_id, timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product)
+            values 
+                (:tick_id, :timestamp, :best_bid, :best_ask, :best_bid_size, :best_ask_size, :total_bid_depth, :total_ask_depth, :ltp, :volume, :volume_by_product);
         '''
         record = {
             'tick_id': ticker['tick_id'],
@@ -284,12 +295,14 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             select * from ticker 
             where timestamp <= :timestamp order by timestamp desc limit 1;
         '''
-        statement = '''
-            select * from ticker
-        '''
-#        return self.query(statement, {'timestamp': t.timestamp()})
-        return self.query(statement)
+        return self.query(statement, {'timestamp': t.timestamp()})
 
+
+    def read_min_max_timestamp_of_ticker(self):
+        statement = '''
+            select min(timestamp), max(timestamp) from ticker;
+        '''
+        return self.query(statement)
 
 
 
@@ -319,17 +332,20 @@ if __name__ == '__main__':
 #    dbsystem.add_message_to_db(ticker_sample)
 
     # 約定履歴読み込みテスト
-    t1 = time_as_datetime('2019-02-01 02:30:00.000000') # UTC timezone
-    t2 = time_as_datetime('2019-02-10 02:31:00.000000')
-    execusions_dict = dbsystem.read_execusions_filtered_by_exec_date(t1, t2)
+#    t1 = time_as_datetime('2019-02-01 02:30:00.000000') # UTC timezone
+#    t2 = time_as_datetime('2019-02-10 02:31:00.000000')
+#    execusions_dict = dbsystem.read_execusions_filtered_by_exec_date(t1, t2)
 
     # bids, asks読み込みテスト
-    t1 = time_as_datetime('2019-02-01 10:30:00.000000') # UTC timezone
-    t2 = time_as_datetime('2019-02-10 12:31:00.000000')
-    bids_dict = dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
-    asks_dict = dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
+#    t1 = time_as_datetime('2019-02-01 10:30:00.000000') # UTC timezone
+#    t2 = time_as_datetime('2019-02-10 12:31:00.000000')
+#    bids_dict = dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
+#    asks_dict = dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
 
     # best_bid, best_ask読み込みテスト
-    t = time_as_datetime('2019-02-10 10:30:00.000000') # UTC timezone
-    ticker_dict = dbsystem.read_latest_ticker(t)
+#    t = time_as_datetime('2019-02-10 10:30:00.000000') # UTC timezone
+#    ticker_dict = dbsystem.read_latest_ticker(t)
+
+    # ティッカーのデータ所持時刻
+    tminmax = dbsystem.read_min_max_timestamp_of_ticker()
         

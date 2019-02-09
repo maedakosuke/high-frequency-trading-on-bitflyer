@@ -8,6 +8,7 @@ Created on Sun Feb  3 11:22:40 2019
 import pandas as pd
 import util.Sqlite3DatabaseSystemForBitflyer as myutil
 from util.Sqlite3DatabaseSystemForBitflyer import Sqlite3DatabaseSystemForBitflyer
+from datetime import datetime
 
 """
 シミュレーションをシンプルにするための条件
@@ -73,6 +74,14 @@ class BitflyerExchange:
         return pd.DataFrame(ticker)
 
 
+    # tickerテーブルのtimestampの範囲を返す
+    def get_timestamp_range_of_ticker(self):
+        res = pd.DataFrame(
+            self.__dbsystem.read_min_max_timestamp_of_ticker()
+        )
+        tmin = res['min(timestamp)'][0]
+        tmax = res['max(timestamp)'][0]
+        return datetime.utcfromtimestamp(tmin), datetime.utcfromtimestamp(tmax)
 
 
 if __name__ == '__main__':
@@ -98,4 +107,9 @@ if __name__ == '__main__':
     # ticker読み込みテスト
     t = myutil.time_as_datetime('2019-02-10 10:30:00.000000') # UTC timezzone
     ticker = exchange.get_latest_ticker(t)
+    best_bid = ticker['best_bid'][0]
+    best_ask = ticker['best_ask'][0]
+    
+    # tickerタイムスタンプ読み込みテスト
+    tmin, tmax = exchange.get_timestamp_range_of_ticker()
     

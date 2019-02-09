@@ -38,10 +38,12 @@ class Strategy:
             'side': 0,
             'price': 0,
             'size': 0
-        }        
+        }
+        # latest ticker
+        ticker = self.__exchange.get_latest_ticker(t)
         if buy_size > sell_size:
             # 時刻tでのbest askを得る
-            best_ask = 0
+            best_ask = ticker['best_ask'][0]
             # 指値を決定する
             order_price = best_ask - self.params['profitspread']
             # 買いの指値注文をする
@@ -52,7 +54,7 @@ class Strategy:
                 position['size'] = self.params['ordersize']
         else:
             # 時刻tでのbest bidを得る
-            best_bid = 0
+            best_bid = ticker['best_bid'][0]
             # 指値を決定する
             order_price = best_bid + self.params['profitspread']
             # 売りの指値注文をする
@@ -63,16 +65,6 @@ class Strategy:
                 position['size'] = self.params['ordersize']
 
         return position    
-
-
-    def show_now(self):
-        global g_now
-        print(g_now)
-        
-    
-    def change_time(self):
-        global g_now
-        g_now = -1 * g_now
     
     
 
@@ -88,17 +80,6 @@ if __name__ == '__main__':
         'loopinterval': 0.1,           
     }
 
-    # global
-    g_now = 1.0
-
-    strategy.show_now()
-    
-    g_now = 2.0
-    
-    strategy.show_now()
-    
-    strategy.change_time()
-
-    print(g_now)  
-    
+    exchange = BitflyerExchange(dbfile_path)
+    tmin, tmax = exchange.get_timestamp_range_of_ticker()
     
