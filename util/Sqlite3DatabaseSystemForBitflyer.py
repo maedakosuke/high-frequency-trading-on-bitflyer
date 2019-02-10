@@ -140,7 +140,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             insert into execusions 
                 (id, exec_date, side, price, size)
             values 
-                (:id, :exec_date, :side, :price, :size);
+                (:id, :exec_date, :side, :price, :size)
+            on conflict (id, exec_date)
+            do update set 
+                side=excluded.side, price=excluded.price, size=excluded.size;
         '''
         for execusion in execusions:
  #           print(str(execusion))
@@ -172,8 +175,13 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # dict record
     def __insert_into_bids_or_asks(self, table_name, record):
         statement = '''
-            insert into %s (get_date, price, size)
-            values (:get_date, :price, :size);
+            insert into %s 
+                (get_date, price, size)
+            values 
+                (:get_date, :price, :size)
+            on conflict (get_date, price)
+            do update set 
+                size=excluded.size;
         ''' % table_name
         self.query(statement, record)
 

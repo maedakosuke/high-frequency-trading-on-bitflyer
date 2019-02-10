@@ -79,7 +79,7 @@ if __name__ == '__main__':
     strategy = Strategy(dbfile_path)
     strategy.params = {
         'ordersize': 0.01,
-        'deltatime': 60,
+        'deltatime': 15,
         'orderfilter': 1.0,
         'profitspread': 100,
         'orderbreak': 1,
@@ -89,16 +89,17 @@ if __name__ == '__main__':
     exchange = BitflyerExchange(dbfile_path)
     tmin, tmax = exchange.get_time_range_of_ticker()
     
-    t = (tmin + tmax) / 2
-    position = strategy.order(t)
-    
     import numpy as np
     dt = 60
+    positions = []
     for i, t in enumerate(np.arange(tmin, tmax, dt)):
         print('%s: %s' % (i, t))
         position = strategy.order(t)
+        if position is not None:
+            positions.append(position)
         print(str(position))
         
-
+    import pandas as pd
+    positions = pd.DataFrame(positions)
 
 

@@ -4,7 +4,7 @@ import util.timeutil as tu
 import json
 import websocket
 import threading
-
+import sys
 from util.Sqlite3DatabaseSystemForBitflyer import Sqlite3DatabaseSystemForBitflyer
 
 
@@ -42,7 +42,7 @@ class BitflyerRealtimeMessenger:
 #            self.__stop_event = threading.Event()  # 停止させるかのフラグ    
 
         except Exception as e:
-            print('%s __initialize_websocket error: %s' % (self._channel, str(e)))
+            print('%s __initialize_websocket error: %s' % (self._channel, str(e)), file=sys.stderr)
             if self.__ws in locals():
                 self.__ws.close()
         
@@ -60,11 +60,11 @@ class BitflyerRealtimeMessenger:
             self.__dbsystem.add_message_to_db(message_dict)
                 
         except Exception as e:
-            print('%s __on_message error: %s' % (self.__channel, str(e)))
+            print('%s __on_message error: %s' % (self.__channel, str(e)), file=sys.stderr)
     
     
     def __on_error(self, ws, error):
-        print('%s __on_error %s' % (self.__channel, error))
+        print('%s __on_error %s' % (self.__channel, error), file=sys.stderr)
         self.stop_websocket_thread()
         tu.sleep(10)
         self.__initialize_websocket()
