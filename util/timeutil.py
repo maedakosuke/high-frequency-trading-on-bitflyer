@@ -35,7 +35,13 @@ def now_as_unixtime():
 def now_as_text(area='Asia/Tokyo'):
     return str(datetime.now(timezone(area)))
     
-    
+
+# unixtime(UTC)をJST時刻形式の文字列に変換する
+def time_as_text(unixtime):
+    t = datetime.fromtimestamp(unixtime + 9*60*60)
+    return str(t.astimezone(timezone('Asia/Tokyo')))
+
+
 
 if __name__ == '__main__':
 

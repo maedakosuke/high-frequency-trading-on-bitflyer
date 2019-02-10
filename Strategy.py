@@ -7,9 +7,12 @@ mmbotxxxのストラテジーを移植する
 
 """
 
+import pandas as pd
+import numpy as np
+
 import util.cnst as cnst
+import util.timeutil as tu
 from BitflyerExchange import BitflyerExchange
-#import pandas as pd
 
 
 class Strategy:
@@ -25,20 +28,25 @@ class Strategy:
         t_dt_ago = t - self.params['deltatime']
         executions = self.__exchange.get_executions(t_dt_ago, t)
         if executions.empty:
-            print('executions is empty')
+            print('order() executions empty')
             return
         else:
-            print('executions size: %s' % executions.size)
+            print('order() executions.size', executions.size)
         buy_size = executions[executions['side']==cnst.BUY]['size'].sum()
         sell_size = executions[executions['side']==cnst.SELL]['size'].sum()
         # buyとsellの2乗差の絶対値を計算する
         delta_d = abs(buy_size**0.5 - sell_size**0.5)
+        print('order() buy_size', buy_size, 'sell_size', sell_size, 'delta_d', delta_d)
         # フィルタを通らない場合は注文しない
         if delta_d <= self.params['orderfilter']:
-            print('delta_d <= orderfileter')
+            print('order() delta_d <= orderfileter')
             return
         # return value
         position = {
+            'timestamp': t,
+            'buy_size': buy_size,
+            'sell_size': sell_size,
+            'delta_d': delta_d,
             'side': 0,
             'price': 0,
             'size': 0
@@ -51,7 +59,10 @@ class Strategy:
         
         if buy_size > sell_size:
             # 時刻tでのbest askを得る
-            best_ask = ticker['best_ask'][0]
+#            best_ask = ticker['best_ask'][0]
+            best_ask = self.__exchange.best_ask_in_constructed_asks()
+            if best_ask is None:
+                return
             # 指値を決定する
             order_price = best_ask - self.params['profitspread']
             # 買いの指値注文をする
@@ -62,7 +73,10 @@ class Strategy:
                 position['size'] = self.params['ordersize']
         else:
             # 時刻tでのbest bidを得る
-            best_bid = ticker['best_bid'][0]
+#            best_bid = ticker['best_bid'][0]
+            best_bid = self.__exchange.best_bid_in_constructed_bids()
+            if best_bid is None:
+                return
             # 指値を決定する
             order_price = best_bid + self.params['profitspread']
             # 売りの指値注文をする
@@ -80,28 +94,27 @@ if __name__ == '__main__':
     dbfile_path = 'C:/workspace/test.sqlite3'
     strategy = Strategy(dbfile_path)
     strategy.params = {
-        'ordersize': 0.01,
-        'deltatime': 15,
-        'orderfilter': 1.0,
-        'profitspread': 100,
-        'orderbreak': 1,
-        'loopinterval': 0.1,           
+        'ordersize': 0.01,    # [BTC]
+        'deltatime': 15,      # [s]
+        'orderfilter': 0,     # [BTC]^0.5
+        'profitspread': -20,  # [JPY]
+        'orderbreak': 0,      # [s] 未使用
+        'loopinterval': 0,  # [s] 未使用
     }
 
     exchange = BitflyerExchange(dbfile_path)
     tmin, tmax = exchange.get_time_range_of_ticker()
     
-    import numpy as np
     dt = 60
     positions = []
     for i, t in enumerate(np.arange(tmin, tmax, dt)):
-        print('%s: %s' % (i, t))
+        print('----------*----------*----------*----------')
+        print(i, tu.time_as_text(t))
         position = strategy.order(t)
         if position is not None:
             positions.append(position)
         print(str(position))
         
-    import pandas as pd
     positions = pd.DataFrame(positions)
 
 

@@ -97,6 +97,8 @@ if __name__ == '__main__':
     product = 'FX_BTC_JPY'
     dbfile_path = 'C:/workspace/test.sqlite3'
 
+    start_time = tu.now_as_unixtime()
+
     executions_messenger = BitflyerRealtimeMessenger(product, 'lightning_executions_FX_BTC_JPY', dbfile_path)
     executions_messenger.start_websocket_thread()
 
@@ -109,10 +111,8 @@ if __name__ == '__main__':
     board_ss_messenger = BitflyerRealtimeMessenger(product, 'lightning_board_snapshot_FX_BTC_JPY', dbfile_path)
     board_ss_messenger.start_websocket_thread()
 
-    tu.sleep(10)
-
-    # ssは10秒後にストップする    
-    board_ss_messenger.stop_websocket_thread()
+    
+    is_ss_running = True
     
     while(True):
         if executions_messenger.is_error:
@@ -135,5 +135,10 @@ if __name__ == '__main__':
             if dt > 10:
                 board_messenger.initialize_websocket()
                 board_messenger.start_websocket_thread()
+
+        if is_ss_running and tu.now_as_unixtime() - start_time > 60:
+            # ssは60秒後にストップする
+            board_ss_messenger.stop_websocket_thread()
+            is_ss_running = False
             
         tu.sleep(1)

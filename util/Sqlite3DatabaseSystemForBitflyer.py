@@ -148,7 +148,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 side=excluded.side, price=excluded.price, size=excluded.size;
         '''
         for execution in executions:
- #           print(str(execution))
+ #           print(execution)
             record = {
                 'id': execution['id'],
                 'exec_date': tu.text_to_unixtime(execution['exec_date']),
@@ -161,75 +161,58 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
     # unixtime t1, t2
     def read_executions_filtered_by_exec_date(self, t1, t2):
-        condition = {
-            'exec_date1': t1,
-            'exec_date2': t2
-        }
         statement = '''
             select id, exec_date, side, price, size from executions 
-            where exec_date >= :exec_date1 and exec_date <= :exec_date2 
+            where exec_date >= :t1 and exec_date <= :t2 
             order by id, exec_date;
         '''
-        return self.query(statement, condition)
+        return self.query(statement, {'t1': t1, 't2': t2})
 
     
     # str table_name ('bids' or 'asks')
     # dict record
-    def __insert_into_bids_or_asks(self, table_name, record):
+    def __insert_into_bids_or_asks(self, table_name, t, price, size):
         statement = '''
             insert into %s 
                 (timestamp, price, size)
             values 
-                (:timestamp, :price, :size)
+                (:t, :p, :s)
             on conflict (timestamp, price)
             do update set 
                 size=excluded.size;
         ''' % table_name
-        self.query(statement, record)
+        self.query(statement, {'t': t, 'p': price, 's': size})
 
     
     # dict orderbook
     def __write_orderbook(self, orderbook):
         now = tu.now_as_unixtime()
-        bids = orderbook['bids']
-        asks = orderbook['asks']
         # orderbook['mid_price']はtickerと重複するので記憶しない
+        for bid in orderbook['bids']:
+#            print(bid)
+            self.__insert_into_bids_or_asks('bids', now, bid['price'], bid['size'])
 
-        for bid in bids:
-            record = {
-                'timestamp': now,
-                'price': bid['price'],
-                'size': bid['size']
-            }
-            self.__insert_into_bids_or_asks('bids', record)
-
-        for ask in asks:
-            record = {
-                'timestamp': now,
-                'price': ask['price'],
-                'size': ask['size']
-            }
-            self.__insert_into_bids_or_asks('asks', record)
+        for ask in orderbook['asks']:
+#            print(ask)
+            self.__insert_into_bids_or_asks('asks', now, ask['price'], ask['size'])
 
 
     # 最新のbids(asks)をセレクトして返す
     # str table_name ('bids' or 'asks')
     # unixtime t1, t2
     def __select_from_latest_bids_or_asks(self, table_name, t1, t2):
-        condition = {
-            'timestamp1': t1,
-            'timestamp2': t2
-        }
         # bids/asksテーブルにはスナップショットと差分情報を格納している
         # timestampが新しいレコードを抽出して使うようにすれば最新の板情報となる
         statement = '''
-            select timestamp, price, size from (
-                select * from %s where rowid in (
-                    select max(rowid) from %s group by price order by timestamp
-                )
-            ) where timestamp >= :timestamp1 and timestamp <= :timestamp2 order by price;
+            select timestamp, price, size from %s 
+            where rowid in (
+                select max(rowid) from %s 
+                where timestamp >= :t1 and timestamp <= :t2 
+                group by price 
+                order by timestamp
+            ) order by price;
         ''' % (table_name, table_name)
-        return self.query(statement, condition)
+        return self.query(statement, {'t1': t1, 't2': t2})
         
 
     # unixtime t1, t2
@@ -315,9 +298,9 @@ if __name__ == '__main__':
 
     # bids, asks読み込みテスト
     t1 = tu.time_as_unixtime('2019-02-01 10:30:00.000000') # UTC timezone
-    t2 = tu.time_as_unixtime('2019-02-10 12:31:00.000000')
-    bids_dict = dbsystem.read_latest_bids_filtered_by_timestamp(t1, t2)
-    asks_dict = dbsystem.read_latest_asks_filtered_by_timestamp(t1, t2)
+    t2 = tu.time_as_unixtime('2019-02-10 14:00:00.000000')
+    bids_dict = dbsystem.read_latest_bids_filtered_by_timestamp(0, t2 - 9*60*60)
+    asks_dict = dbsystem.read_latest_asks_filtered_by_timestamp(0, t2 - 9*60*60)
 
     # best_bid, best_ask読み込みテスト
     t = tu.time_as_unixtime('2019-02-10 10:30:00.000000') # UTC timezone
