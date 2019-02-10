@@ -3,6 +3,7 @@
 import sqlite3
 import threading
 import util.timeutil as tu
+import sys
 
 
 def buy0_sell1(text):
@@ -26,7 +27,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         self.__db_file_path = db_file_path
 
         # create tables if not exist
-        self.__create_execusions_table()
+        self.__create_executions_table()
         self.__create_bids_table()
         self.__create_asks_table()
         self.__create_ticker_table()
@@ -52,12 +53,12 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 connection.close()
 
         except sqlite3.Error as e:
-            print('sqlite3.Error: ', e.args[0])
+            print(tu.now_as_text(), 'sqlite3 error:', e.args[0], file=sys.stderr)
             
 
-    def __create_execusions_table(self):
+    def __create_executions_table(self):
         statement = '''
-            create table if not exists execusions (
+            create table if not exists executions (
                 id integer,
                 exec_date real,
                 side integer,
@@ -119,7 +120,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         message_body = message['params']['message']  # dict
 
         if channel_name == 'lightning_executions_FX_BTC_JPY':
-            self.__write_execusions(message_body)
+            self.__write_executions(message_body)
             
         elif channel_name == 'lightning_ticker_FX_BTC_JPY':
             self.__write_ticker(message_body)
@@ -134,10 +135,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             pass
     
 
-    # dict execusions
-    def __write_execusions(self, execusions):
+    # dict executions
+    def __write_executions(self, executions):
         statement = '''
-            insert into execusions 
+            insert into executions 
                 (id, exec_date, side, price, size)
             values 
                 (:id, :exec_date, :side, :price, :size)
@@ -145,26 +146,26 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             do update set 
                 side=excluded.side, price=excluded.price, size=excluded.size;
         '''
-        for execusion in execusions:
- #           print(str(execusion))
+        for execution in executions:
+ #           print(str(execution))
             record = {
-                'id': execusion['id'],
-                'exec_date': tu.text_to_unixtime(execusion['exec_date']),
-                'side': buy0_sell1(execusion['side']),
-                'price': execusion['price'],
-                'size': execusion['size']
+                'id': execution['id'],
+                'exec_date': tu.text_to_unixtime(execution['exec_date']),
+                'side': buy0_sell1(execution['side']),
+                'price': execution['price'],
+                'size': execution['size']
             }
             self.query(statement, record)
 
 
     # unixtime t1, t2
-    def read_execusions_filtered_by_exec_date(self, t1, t2):
+    def read_executions_filtered_by_exec_date(self, t1, t2):
         condition = {
             'exec_date1': t1,
             'exec_date2': t2
         }
         statement = '''
-            select id, exec_date, side, price, size from execusions 
+            select id, exec_date, side, price, size from executions 
             where exec_date >= :exec_date1 and exec_date <= :exec_date2 
             order by id, exec_date;
         '''
@@ -288,9 +289,9 @@ if __name__ == '__main__':
     import json
 
     # 約定書き込みテスト
-#    execusions_message_sample = '{"jsonrpc":"2.0","method":"channelMessage","params":{"channel":"lightning_executions_FX_BTC_JPY","message":[{"id":743340674,"side":"BUY","price":405124.0,"size":0.05,"exec_date":"2019-01-20T09:38:58.3441498Z","buy_child_order_acceptance_id":"JRF20190120-093858-642632","sell_child_order_acceptance_id":"JRF20190120-093858-457527"},{"id":743340675,"side":"BUY","price":405150.0,"size":0.05,"exec_date":"2019-01-20T09:38:58.3441498Z","buy_child_order_acceptance_id":"JRF20190120-093858-642632","sell_child_order_acceptance_id":"JRF20190120-093856-784927"},{"id":743340676,"side":"SELL","price":405122.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.359778Z","buy_child_order_acceptance_id":"JRF20190120-093857-222036","sell_child_order_acceptance_id":"JRF20190120-093858-775500"},{"id":743340677,"side":"SELL","price":405122.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.3753993Z","buy_child_order_acceptance_id":"JRF20190120-093857-472307","sell_child_order_acceptance_id":"JRF20190120-093858-388702"},{"id":743340678,"side":"SELL","price":405122.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.3910251Z","buy_child_order_acceptance_id":"JRF20190120-093857-775495","sell_child_order_acceptance_id":"JRF20190120-093858-472309"},{"id":743340679,"side":"SELL","price":405099.0,"size":0.0145454,"exec_date":"2019-01-20T09:38:58.3910251Z","buy_child_order_acceptance_id":"JRF20190120-093857-388700","sell_child_order_acceptance_id":"JRF20190120-093858-506557"},{"id":743340680,"side":"SELL","price":405099.0,"size":0.05,"exec_date":"2019-01-20T09:38:58.4066494Z","buy_child_order_acceptance_id":"JRF20190120-093857-388700","sell_child_order_acceptance_id":"JRF20190120-093858-642634"},{"id":743340681,"side":"SELL","price":405099.0,"size":0.0354546,"exec_date":"2019-01-20T09:38:58.4066494Z","buy_child_order_acceptance_id":"JRF20190120-093857-388700","sell_child_order_acceptance_id":"JRF20190120-093858-222047"},{"id":743340682,"side":"SELL","price":405096.0,"size":0.0145454,"exec_date":"2019-01-20T09:38:58.4222757Z","buy_child_order_acceptance_id":"JRF20190120-093858-661238","sell_child_order_acceptance_id":"JRF20190120-093858-222047"},{"id":743340683,"side":"BUY","price":405123.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.4535212Z","buy_child_order_acceptance_id":"JRF20190120-093858-457528","sell_child_order_acceptance_id":"JRF20190120-093858-877465"},{"id":743340684,"side":"BUY","price":405150.0,"size":0.98,"exec_date":"2019-01-20T09:38:58.4535212Z","buy_child_order_acceptance_id":"JRF20190120-093858-457528","sell_child_order_acceptance_id":"JRF20190120-093856-784927"},{"id":743340685,"side":"BUY","price":405150.0,"size":0.2,"exec_date":"2019-01-20T09:38:58.4691452Z","buy_child_order_acceptance_id":"JRF20190120-093858-588340","sell_child_order_acceptance_id":"JRF20190120-093856-784927"},{"id":743340686,"side":"SELL","price":405096.0,"size":0.0054546,"exec_date":"2019-01-20T09:38:58.4847709Z","buy_child_order_acceptance_id":"JRF20190120-093858-661238","sell_child_order_acceptance_id":"JRF20190120-093858-588341"},{"id":743340687,"side":"SELL","price":405095.0,"size":0.0345454,"exec_date":"2019-01-20T09:38:58.4847709Z","buy_child_order_acceptance_id":"JRF20190120-093857-002083","sell_child_order_acceptance_id":"JRF20190120-093858-588341"}]}}'
-#    execusions_message_sample = json.loads(execusions_message_sample)
-#    dbsystem.add_message_to_db(execusions_message_sample)
+#    executions_message_sample = '{"jsonrpc":"2.0","method":"channelMessage","params":{"channel":"lightning_executions_FX_BTC_JPY","message":[{"id":743340674,"side":"BUY","price":405124.0,"size":0.05,"exec_date":"2019-01-20T09:38:58.3441498Z","buy_child_order_acceptance_id":"JRF20190120-093858-642632","sell_child_order_acceptance_id":"JRF20190120-093858-457527"},{"id":743340675,"side":"BUY","price":405150.0,"size":0.05,"exec_date":"2019-01-20T09:38:58.3441498Z","buy_child_order_acceptance_id":"JRF20190120-093858-642632","sell_child_order_acceptance_id":"JRF20190120-093856-784927"},{"id":743340676,"side":"SELL","price":405122.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.359778Z","buy_child_order_acceptance_id":"JRF20190120-093857-222036","sell_child_order_acceptance_id":"JRF20190120-093858-775500"},{"id":743340677,"side":"SELL","price":405122.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.3753993Z","buy_child_order_acceptance_id":"JRF20190120-093857-472307","sell_child_order_acceptance_id":"JRF20190120-093858-388702"},{"id":743340678,"side":"SELL","price":405122.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.3910251Z","buy_child_order_acceptance_id":"JRF20190120-093857-775495","sell_child_order_acceptance_id":"JRF20190120-093858-472309"},{"id":743340679,"side":"SELL","price":405099.0,"size":0.0145454,"exec_date":"2019-01-20T09:38:58.3910251Z","buy_child_order_acceptance_id":"JRF20190120-093857-388700","sell_child_order_acceptance_id":"JRF20190120-093858-506557"},{"id":743340680,"side":"SELL","price":405099.0,"size":0.05,"exec_date":"2019-01-20T09:38:58.4066494Z","buy_child_order_acceptance_id":"JRF20190120-093857-388700","sell_child_order_acceptance_id":"JRF20190120-093858-642634"},{"id":743340681,"side":"SELL","price":405099.0,"size":0.0354546,"exec_date":"2019-01-20T09:38:58.4066494Z","buy_child_order_acceptance_id":"JRF20190120-093857-388700","sell_child_order_acceptance_id":"JRF20190120-093858-222047"},{"id":743340682,"side":"SELL","price":405096.0,"size":0.0145454,"exec_date":"2019-01-20T09:38:58.4222757Z","buy_child_order_acceptance_id":"JRF20190120-093858-661238","sell_child_order_acceptance_id":"JRF20190120-093858-222047"},{"id":743340683,"side":"BUY","price":405123.0,"size":0.01,"exec_date":"2019-01-20T09:38:58.4535212Z","buy_child_order_acceptance_id":"JRF20190120-093858-457528","sell_child_order_acceptance_id":"JRF20190120-093858-877465"},{"id":743340684,"side":"BUY","price":405150.0,"size":0.98,"exec_date":"2019-01-20T09:38:58.4535212Z","buy_child_order_acceptance_id":"JRF20190120-093858-457528","sell_child_order_acceptance_id":"JRF20190120-093856-784927"},{"id":743340685,"side":"BUY","price":405150.0,"size":0.2,"exec_date":"2019-01-20T09:38:58.4691452Z","buy_child_order_acceptance_id":"JRF20190120-093858-588340","sell_child_order_acceptance_id":"JRF20190120-093856-784927"},{"id":743340686,"side":"SELL","price":405096.0,"size":0.0054546,"exec_date":"2019-01-20T09:38:58.4847709Z","buy_child_order_acceptance_id":"JRF20190120-093858-661238","sell_child_order_acceptance_id":"JRF20190120-093858-588341"},{"id":743340687,"side":"SELL","price":405095.0,"size":0.0345454,"exec_date":"2019-01-20T09:38:58.4847709Z","buy_child_order_acceptance_id":"JRF20190120-093857-002083","sell_child_order_acceptance_id":"JRF20190120-093858-588341"}]}}'
+#    executions_message_sample = json.loads(executions_message_sample)
+#    dbsystem.add_message_to_db(executions_message_sample)
 
     # 板情報書き込みテスト
 #    board_ss_sample = '''
@@ -309,7 +310,7 @@ if __name__ == '__main__':
     # 約定履歴読み込みテスト
     t1 = tu.time_as_unixtime('2019-02-01 02:30:00.000000') # UTC timezone
     t2 = tu.time_as_unixtime('2019-02-10 02:31:00.000000')
-    execusions_dict = dbsystem.read_execusions_filtered_by_exec_date(t1, t2)
+    executions_dict = dbsystem.read_executions_filtered_by_exec_date(t1, t2)
 
     # bids, asks読み込みテスト
     t1 = tu.time_as_unixtime('2019-02-01 10:30:00.000000') # UTC timezone

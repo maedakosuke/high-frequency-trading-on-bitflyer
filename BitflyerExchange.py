@@ -19,9 +19,9 @@ class BitflyerExchange:
     
     # 時刻t1-t2の間の約定履歴を提供する
     # unixtime t1, t2
-    def get_execusions(self, t1, t2):
-        execusions = self.__dbsystem.read_execusions_filtered_by_exec_date(t1, t2)
-        return pd.DataFrame(execusions)
+    def get_executions(self, t1, t2):
+        executions = self.__dbsystem.read_executions_filtered_by_exec_date(t1, t2)
+        return pd.DataFrame(executions)
         
     
     # スナップショットと差分情報から時刻tの時点のbidsデータを構成する
@@ -87,10 +87,10 @@ if __name__ == '__main__':
     dbfile_path = 'C:/workspace/test.sqlite3'
     exchange = BitflyerExchange(dbfile_path)
 
-    # execusions読み込みテスト
+    # executions読み込みテスト
     t1 = tu.time_as_unixtime('2019-02-01 02:30:00.000000') # UTC timezone
     t2 = tu.time_as_unixtime('2019-02-10 02:31:00.000000')
-    execusions = exchange.get_execusions(t1, t2)
+    executions = exchange.get_executions(t1, t2)
 
     # bids, asks構成テスト
     t1 = tu.time_as_unixtime('2019-02-01 10:30:00.000000') # UTC timezzone
@@ -101,8 +101,8 @@ if __name__ == '__main__':
     asks = exchange.asks
 
     # 指値注文テスト    
-    is_execusion_success = exchange.limit_order(0, 376000, 0.01)  # BUY
-    is_execusion_success = exchange.limit_order(1, 376000, 0.01)  # SELL
+    is_execution_success = exchange.limit_order(0, 376000, 0.01)  # BUY
+    is_execution_success = exchange.limit_order(1, 376000, 0.01)  # SELL
 
     # ticker読み込みテスト
     t = tu.time_as_unixtime('2019-02-10 10:30:00.000000') # UTC timezzone

@@ -21,14 +21,14 @@ class Strategy:
     def order(self, t):
         # 過去deltatime[sec]間のbuy/sellのサイズを集計する
         t_dt_ago = t - self.params['deltatime']
-        execusions = self.__exchange.get_execusions(t_dt_ago, t)
-        if execusions.empty:
-            print('execusions is empty')
+        executions = self.__exchange.get_executions(t_dt_ago, t)
+        if executions.empty:
+            print('executions is empty')
             return
         else:
-            print('execusions size: %s' % execusions.size)
-        buy_size = execusions[execusions['side']==0]['size'].sum()
-        sell_size = execusions[execusions['side']==1]['size'].sum()
+            print('executions size: %s' % executions.size)
+        buy_size = executions[executions['side']==0]['size'].sum()
+        sell_size = executions[executions['side']==1]['size'].sum()
         # buyとsellの2乗差の絶対値を計算する
         delta_d = abs(buy_size**0.5 - sell_size**0.5)
         # フィルタを通らない場合は注文しない
@@ -53,8 +53,8 @@ class Strategy:
             # 指値を決定する
             order_price = best_ask - self.params['profitspread']
             # 買いの指値注文をする
-            is_execusion = self.__exchange.limit_order(0, order_price, self.params['ordersize'])
-            if is_execusion:
+            is_execution = self.__exchange.limit_order(0, order_price, self.params['ordersize'])
+            if is_execution:
                 position['side'] = 0
                 position['price'] = order_price
                 position['size'] = self.params['ordersize']
@@ -64,8 +64,8 @@ class Strategy:
             # 指値を決定する
             order_price = best_bid + self.params['profitspread']
             # 売りの指値注文をする
-            is_execusion = self.__exchange.limit_order(1, order_price, self.params['ordersize'])
-            if is_execusion:
+            is_execution = self.__exchange.limit_order(1, order_price, self.params['ordersize'])
+            if is_execution:
                 position['side'] = 1
                 position['price'] = order_price
                 position['size'] = self.params['ordersize']

@@ -9,28 +9,23 @@ from util.Sqlite3DatabaseSystemForBitflyer import Sqlite3DatabaseSystemForBitfly
 
 
 class BitflyerRealtimeMessenger:
-    # member variables
-    # __dbsystem
-    # __product
-    # __channel
-    # __ws
-    # __latest_working_time
-    # __message_count
-
     def __init__(self, product, channel, sqlite3_file_path):
         self.__dbsystem = Sqlite3DatabaseSystemForBitflyer(sqlite3_file_path)
         self.__product = product
         self.__channel = channel
-        self.__message_count = 0
+
+        self.is_error = False  # 0:normal 1:error 
+        self.message_time = 0  # 最後にmessageを受信したunixtime
+        self.message_count = 0  # messageを受信した回数
         
-        self.__initialize_websocket()
+        self.initialize_websocket()
 
 
-    def __initialize_websocket(self):
+    def initialize_websocket(self):
         try:
             # set true to debug
             websocket.enableTrace(False)
-            print('WebSocket Connection Open')
+            print(tu.now_as_text(), self.__channel, 'open websocket connection')
             self.__ws = websocket.WebSocketApp(
                 'wss://ws.lightstream.bitflyer.com/json-rpc',
                 on_message = self.__on_message,
@@ -38,41 +33,35 @@ class BitflyerRealtimeMessenger:
                 on_close = self.__on_close
             )
             self.__ws.on_open = self.__on_open
-
-#            self.__stop_event = threading.Event()  # 停止させるかのフラグ    
+            self.is_error = False
 
         except Exception as e:
-            print('%s __initialize_websocket error: %s' % (self._channel, str(e)), file=sys.stderr)
-            if self.__ws in locals():
-                self.__ws.close()
-        
+            print(tu.now_as_text(), self.__channel, 'initialize_websocket error', e.args[0], file=sys.stderr)
+            self.is_error = True
 
-    # start RealtimeAPI for volume check
+
     def __on_message(self, ws, message):
-#        if self.__stop_event.is_set():
-#            return
-        try:    
-            self.__message_count += 1
-            print('%s __on_message %s %s' % (self.__channel, self.__message_count, tu.now_as_text()))
-            self.__latest_working_time = tu.now_as_unixtime()
+        try:
+            self.message_count += 1
+            self.message_time = tu.now_as_unixtime()
+            print(tu.now_as_text(), self.__channel, '__on_message', self.message_count)
 
             message_dict = json.loads(message)
             self.__dbsystem.add_message_to_db(message_dict)
                 
         except Exception as e:
-            print('%s __on_message error: %s' % (self.__channel, str(e)), file=sys.stderr)
+            print(tu.now_as_text(), self.__channel, '__on_message error', e.args[0], file=sys.stderr)
     
     
     def __on_error(self, ws, error):
-        print('%s __on_error %s' % (self.__channel, error), file=sys.stderr)
-        self.stop_websocket_thread()
-        tu.sleep(10)
-        self.__initialize_websocket()
-        self.start_websocket_thread()
+        print(tu.now_as_text(), self.__channel, '__on_error', error, file=sys.stderr)
+        # クラスのクライアントがis_errorをウォッチしていて
+        # websocketのクローズ、threadのストップと再スタートを行う
+        self.is_error = True
 
 
     def __on_close(self, ws):
-        print('%s __on_close' % self.__channel)
+        print(tu.now_as_text(), self.__channel, '__on_close')
 
 
     def __on_open(self, ws):
@@ -88,17 +77,21 @@ class BitflyerRealtimeMessenger:
     
     
     def start_websocket_thread(self):
-        print('%s start_websocket_thread' % self.__channel)
+        print(tu.now_as_text(), self.__channel, 'start websocket thread')
         self.__ws_thread = threading.Thread(target=self.__ws.run_forever)
         self.__ws_thread.daemon = True
         self.__ws_thread.start()
 
 
+    # クラスのクライアントからコールしないとcannot join current threadエラーが出る
     def stop_websocket_thread(self):
-        print('%s stop_websocket_thread' % self.__channel)
-        self.__ws.close()
-#        self.__stop_event.set()
-        self.__ws_thread.join()
+        print(tu.now_as_text(), self.__channel, 'stop websocket thread')
+        if self.__ws in locals():
+            self.__ws.close()
+        if self.__ws_thread in locals():
+            self.__ws_thread.join()
+
+
 
 
 if __name__ == '__main__':
@@ -106,8 +99,8 @@ if __name__ == '__main__':
     product = 'FX_BTC_JPY'
     dbfile_path = 'C:/workspace/test.sqlite3'
 
-    execusions_messenger = BitflyerRealtimeMessenger(product, 'lightning_executions_FX_BTC_JPY', dbfile_path)
-    execusions_messenger.start_websocket_thread()
+    executions_messenger = BitflyerRealtimeMessenger(product, 'lightning_executions_FX_BTC_JPY', dbfile_path)
+    executions_messenger.start_websocket_thread()
 
     ticker_messenger = BitflyerRealtimeMessenger(product, 'lightning_ticker_FX_BTC_JPY', dbfile_path)
     ticker_messenger.start_websocket_thread()
@@ -124,4 +117,25 @@ if __name__ == '__main__':
     board_ss_messenger.stop_websocket_thread()
     
     while(True):
+        if executions_messenger.is_error:
+            executions_messenger.stop_websocket_thread()
+            dt = tu.now_as_unixtime() - executions_messenger.message_time
+            if dt > 10:
+                executions_messenger.initialize_websocket()
+                executions_messenger.start_websocket_thread()
+            
+        if ticker_messenger.is_error:
+            ticker_messenger.stop_websocket_thread()
+            dt = tu.now_as_unixtime() - ticker_messenger.message_time
+            if dt > 10:
+                ticker_messenger.initialize_websocket()
+                ticker_messenger.start_websocket_thread()
+
+        if board_messenger.is_error:
+            board_messenger.stop_websocket_thread()
+            dt = tu.now_as_unixtime() - board_messenger.message_time
+            if dt > 10:
+                board_messenger.initialize_websocket()
+                board_messenger.start_websocket_thread()
+            
         tu.sleep(1)
