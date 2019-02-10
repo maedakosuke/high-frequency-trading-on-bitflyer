@@ -25,7 +25,7 @@ class BitflyerRealtimeMessenger:
         try:
             # set true to debug
             websocket.enableTrace(False)
-            print(tu.now_as_text(), self.__channel, 'open websocket connection')
+            print(tu.now_as_text(), self.__channel, 'open websocket connection', file=sys.stderr)
             self.__ws = websocket.WebSocketApp(
                 'wss://ws.lightstream.bitflyer.com/json-rpc',
                 on_message = self.__on_message,
@@ -77,7 +77,7 @@ class BitflyerRealtimeMessenger:
     
     
     def start_websocket_thread(self):
-        print(tu.now_as_text(), self.__channel, 'start websocket thread')
+        print(tu.now_as_text(), self.__channel, 'start websocket thread', file=sys.stderr)
         self.__ws_thread = threading.Thread(target=self.__ws.run_forever)
         self.__ws_thread.daemon = True
         self.__ws_thread.start()
@@ -85,11 +85,9 @@ class BitflyerRealtimeMessenger:
 
     # クラスのクライアントからコールしないとcannot join current threadエラーが出る
     def stop_websocket_thread(self):
-        print(tu.now_as_text(), self.__channel, 'stop websocket thread')
-        if self.__ws in locals():
-            self.__ws.close()
-        if self.__ws_thread in locals():
-            self.__ws_thread.join()
+        print(tu.now_as_text(), self.__channel, 'stop websocket thread', file=sys.stderr)
+        self.__ws.close()
+        self.__ws_thread.join()
 
 
 
