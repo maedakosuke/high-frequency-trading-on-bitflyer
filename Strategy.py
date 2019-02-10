@@ -7,8 +7,10 @@ mmbotxxxのストラテジーを移植する
 
 """
 
+import util.cnst as cnst
 from BitflyerExchange import BitflyerExchange
 #import pandas as pd
+
 
 class Strategy:
     def __init__(self, sqlite3_file_path):
@@ -27,8 +29,8 @@ class Strategy:
             return
         else:
             print('executions size: %s' % executions.size)
-        buy_size = executions[executions['side']==0]['size'].sum()
-        sell_size = executions[executions['side']==1]['size'].sum()
+        buy_size = executions[executions['side']==cnst.BUY]['size'].sum()
+        sell_size = executions[executions['side']==cnst.SELL]['size'].sum()
         # buyとsellの2乗差の絶対値を計算する
         delta_d = abs(buy_size**0.5 - sell_size**0.5)
         # フィルタを通らない場合は注文しない
@@ -53,9 +55,9 @@ class Strategy:
             # 指値を決定する
             order_price = best_ask - self.params['profitspread']
             # 買いの指値注文をする
-            is_execution = self.__exchange.limit_order(0, order_price, self.params['ordersize'])
+            is_execution = self.__exchange.limit_order(cnst.BUY, order_price, self.params['ordersize'])
             if is_execution:
-                position['side'] = 0
+                position['side'] = cnst.BUY
                 position['price'] = order_price
                 position['size'] = self.params['ordersize']
         else:
@@ -64,9 +66,9 @@ class Strategy:
             # 指値を決定する
             order_price = best_bid + self.params['profitspread']
             # 売りの指値注文をする
-            is_execution = self.__exchange.limit_order(1, order_price, self.params['ordersize'])
+            is_execution = self.__exchange.limit_order(cnst.SELL, order_price, self.params['ordersize'])
             if is_execution:
-                position['side'] = 1
+                position['side'] = cnst.SELL
                 position['price'] = order_price
                 position['size'] = self.params['ordersize']
 

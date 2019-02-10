@@ -8,6 +8,7 @@ Created on Sun Feb  3 11:22:40 2019
 """
 
 import pandas as pd
+import util.cnst as cnst
 import util.timeutil as tu
 from util.Sqlite3DatabaseSystemForBitflyer import Sqlite3DatabaseSystemForBitflyer
 
@@ -28,7 +29,7 @@ class BitflyerExchange:
     # unixtime t1, t2
     def reconstruct_bids(self, t1, t2):
         self.bids = pd.DataFrame(
-            self.__dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
+            self.__dbsystem.read_latest_bids_filtered_by_timestamp(t1, t2)
         )
         print('bids size: %s (%s - %s)' % (self.bids.size, t1, t2))
 
@@ -37,7 +38,7 @@ class BitflyerExchange:
     # unixtime t1, t2
     def reconstruct_asks(self, t1, t2):
         self.asks = pd.DataFrame(
-            self.__dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
+            self.__dbsystem.read_latest_asks_filtered_by_timestamp(t1, t2)
         )
         print('asks size: %s (%s - %s)' % (self.asks.size, t1, t2))
 
@@ -51,11 +52,11 @@ class BitflyerExchange:
             print('bids / asks is empty')
             return
 
-        if side == 0:
+        if side == cnst.BUY:
             # buy limit orderなので上限以下のasksを参照する
             # 指値より安く買える場合は約定する
             df =  self.asks[(self.asks['price']<=price) & (self.asks['size']>0)]
-        elif side == 1:
+        elif side == cnst.SELL:
             # sell limit orderなので下限以上のbidsを参照する
             # 指値より高く売れる場合は約定する
             df = self.bids[(self.bids['price']>=price) & (self.bids['size']>0)]
@@ -101,8 +102,8 @@ if __name__ == '__main__':
     asks = exchange.asks
 
     # 指値注文テスト    
-    is_execution_success = exchange.limit_order(0, 376000, 0.01)  # BUY
-    is_execution_success = exchange.limit_order(1, 376000, 0.01)  # SELL
+    is_execution_success = exchange.limit_order(cnst.BUY, 376000, 0.01)  # BUY
+    is_execution_success = exchange.limit_order(cnst.SELL, 376000, 0.01)  # SELL
 
     # ticker読み込みテスト
     t = tu.time_as_unixtime('2019-02-10 10:30:00.000000') # UTC timezzone

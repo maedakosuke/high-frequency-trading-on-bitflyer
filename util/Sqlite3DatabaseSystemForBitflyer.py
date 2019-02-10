@@ -2,17 +2,18 @@
 
 import sqlite3
 import threading
-import util.timeutil as tu
 import sys
+import util.cnst as cnst
+import util.timeutil as tu
 
 
-def buy0_sell1(text):
+def side_as_int(text):
     if text == 'BUY':
-        return 0
+        return cnst.BUY
     elif text == 'SELL':
-        return 1
+        return cnst.SELL
     else:
-        return -1  # 板寄せ
+        return cnst.ITAYOSE
 
 
 def dict_factory(cursor, row):
@@ -53,7 +54,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 connection.close()
 
         except sqlite3.Error as e:
-            print(tu.now_as_text(), 'sqlite3 error:', e.args[0], file=sys.stderr)
+            print(tu.now_as_text(), 'sqlite3 error', e.args[0], file=sys.stderr)
             
 
     def __create_executions_table(self):
@@ -73,10 +74,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def __create_bids_table(self):
         statement = '''
             create table if not exists bids (
-                get_date real,
+                timestamp real,
                 price real,
                 size real,
-                primary key (get_date, price)
+                primary key (timestamp, price)
             );
         '''
         self.query(statement)
@@ -85,10 +86,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def __create_asks_table(self):
         statement = '''
             create table if not exists asks (
-                get_date real,
+                timestamp real,
                 price real,
                 size real,
-                primary key (get_date, price)
+                primary key (timestamp, price)
             );
         '''
         self.query(statement)
@@ -151,7 +152,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             record = {
                 'id': execution['id'],
                 'exec_date': tu.text_to_unixtime(execution['exec_date']),
-                'side': buy0_sell1(execution['side']),
+                'side': side_as_int(execution['side']),
                 'price': execution['price'],
                 'size': execution['size']
             }
@@ -177,10 +178,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def __insert_into_bids_or_asks(self, table_name, record):
         statement = '''
             insert into %s 
-                (get_date, price, size)
+                (timestamp, price, size)
             values 
-                (:get_date, :price, :size)
-            on conflict (get_date, price)
+                (:timestamp, :price, :size)
+            on conflict (timestamp, price)
             do update set 
                 size=excluded.size;
         ''' % table_name
@@ -196,7 +197,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
         for bid in bids:
             record = {
-                'get_date': now,
+                'timestamp': now,
                 'price': bid['price'],
                 'size': bid['size']
             }
@@ -204,7 +205,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
         for ask in asks:
             record = {
-                'get_date': now,
+                'timestamp': now,
                 'price': ask['price'],
                 'size': ask['size']
             }
@@ -216,28 +217,28 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # unixtime t1, t2
     def __select_from_latest_bids_or_asks(self, table_name, t1, t2):
         condition = {
-            'get_date1': t1,
-            'get_date2': t2
+            'timestamp1': t1,
+            'timestamp2': t2
         }
         # bids/asksテーブルにはスナップショットと差分情報を格納している
-        # get_dateが新しいレコードを抽出して使うようにすれば最新の板情報となる
+        # timestampが新しいレコードを抽出して使うようにすれば最新の板情報となる
         statement = '''
-            select get_date, price, size from (
+            select timestamp, price, size from (
                 select * from %s where rowid in (
-                    select max(rowid) from %s group by price order by get_date
+                    select max(rowid) from %s group by price order by timestamp
                 )
-            ) where get_date >= :get_date1 and get_date <= :get_date2 order by price;
+            ) where timestamp >= :timestamp1 and timestamp <= :timestamp2 order by price;
         ''' % (table_name, table_name)
         return self.query(statement, condition)
         
 
     # unixtime t1, t2
-    def read_latest_bids_filtered_by_get_date(self, t1, t2):
+    def read_latest_bids_filtered_by_timestamp(self, t1, t2):
         return self.__select_from_latest_bids_or_asks('bids', t1, t2)
 
 
     # unixtime t1, t2
-    def read_latest_asks_filtered_by_get_date(self, t1, t2):
+    def read_latest_asks_filtered_by_timestamp(self, t1, t2):
         return self.__select_from_latest_bids_or_asks('asks', t1, t2)
 
         
@@ -315,8 +316,8 @@ if __name__ == '__main__':
     # bids, asks読み込みテスト
     t1 = tu.time_as_unixtime('2019-02-01 10:30:00.000000') # UTC timezone
     t2 = tu.time_as_unixtime('2019-02-10 12:31:00.000000')
-    bids_dict = dbsystem.read_latest_bids_filtered_by_get_date(t1, t2)
-    asks_dict = dbsystem.read_latest_asks_filtered_by_get_date(t1, t2)
+    bids_dict = dbsystem.read_latest_bids_filtered_by_timestamp(t1, t2)
+    asks_dict = dbsystem.read_latest_asks_filtered_by_timestamp(t1, t2)
 
     # best_bid, best_ask読み込みテスト
     t = tu.time_as_unixtime('2019-02-10 10:30:00.000000') # UTC timezone
