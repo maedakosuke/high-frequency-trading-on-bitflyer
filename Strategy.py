@@ -89,6 +89,24 @@ class Strategy:
         return position    
     
     
+def total_btc(positions):
+    return (positions['side'] * positions['size']).sum()
+
+
+def total_jpy(positions):
+    return (positions['price'] * (-1 * positions['side']) * positions['size']).sum()
+
+
+def summarize_asset(positions):
+    btc = total_btc(positions)
+    jpy = total_jpy(positions)
+    ltp = positions[-1:]['price'].values[0]
+    asset = jpy + ltp * btc
+    print('total btc    :', btc, '[BTC]')
+    print('total jpy    :', jpy, '[JPY]')
+    print('ltp          :', ltp, '[JPY]')
+    print('asset        :', asset, '[JPY]')
+    
 
 if __name__ == '__main__':
     dbfile_path = 'C:/workspace/test.sqlite3'
@@ -116,5 +134,6 @@ if __name__ == '__main__':
         print(str(position))
         
     positions = pd.DataFrame(positions)
+    summarize_asset(positions)
 
 

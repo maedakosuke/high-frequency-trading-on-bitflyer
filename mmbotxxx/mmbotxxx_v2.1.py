@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime
-from dateutil.parser import parse
+from dateutil. import parse
 from functools import reduce
 import json
 import math
@@ -19,11 +19,11 @@ import websocket
 # parameter
 bitflyer_params = {
     'ordersize': 0.01,
-    'deltaTime': 5,
-    'orderfilter': 1.0,
-    'profitspread': 100,
+    'deltaTime': 15,
+    'orderfilter': 0,
+    'profitspread': -20,
     'orderbreak': 1,
-    'loopinterval': 0.1,
+    'loopinterval': 0,
 }
 
 ok_status =  ['NORMAL','BUSY','VERY BUSY']
@@ -83,7 +83,7 @@ def on_close_and_error(ws, error):
         'sell': 0,
         'time': datetime.now()
     }
-    ws.close
+    ws.close()
     sys.exit(1)
     pass
 
@@ -111,7 +111,7 @@ def websockets_bitflyer():
     except Exception as e:
         print(e.args)
         if ws in locals():
-            ws.close
+            ws.close()
 
 class websockets_bitflyer_monitor():
     def __init__(self, interval=1):
