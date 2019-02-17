@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from datetime import datetime
-from dateutil. import parse
+from dateutil.parser import parse
 from functools import reduce
 import json
 import math

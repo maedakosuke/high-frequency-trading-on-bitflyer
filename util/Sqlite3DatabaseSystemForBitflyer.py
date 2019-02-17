@@ -27,6 +27,11 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def __init__(self, db_file_path):
         self.__db_file_path = db_file_path
 
+        # selectクエリ用の常時接続インスタンス
+        self.__steady_connection = sqlite3.connect(self.__db_file_path, check_same_thread=False)
+        self.__steady_connection.row_factory = dict_factory  # use dict, not tupple
+        self.__steady_cursor = self.__steady_connection.cursor()
+
         # create tables if not exist
         self.__create_executions_table()
         self.__create_bids_table()
@@ -37,21 +42,27 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # str statement, dict arg
     def query(self, statement, arg=None):
         try:
-            connection = sqlite3.connect(self.__db_file_path, check_same_thread=False)
-            connection.row_factory = dict_factory  # use dict, not tupple
-            cursor = connection.cursor()
             statement = statement.strip()  # 両端の空白を消去する
-            if arg is None:
-                cursor.execute(statement)
-            else:
-                cursor.execute(statement, arg)
+
             if statement.startswith('select') or statement.startswith('SELECT'):
-                selected = cursor.fetchall()
-                connection.close()
-                return selected
+                # selectクエリは接続のタイムロスをなくすために常時接続しているインスタンスを使用する
+                if arg is None:
+                    self.__steady_cursor.execute(statement)
+                else:
+                    self.__steady_cursor.execute(statement, arg)
+                return self.__steady_cursor.fetchall()
+
             else:
-                connection.commit()
-                connection.close()
+                # insert/updateクエリは都度接続したほうがdatabase is lockedエラーが少ない
+                tmp_connection = sqlite3.connect(self.__db_file_path, check_same_thread=False)
+                tmp_connection.row_factory = dict_factory  # use dict, not tupple
+                tmp_cursor = tmp_connection.cursor()
+                if arg is None:
+                    tmp_cursor.execute(statement)
+                else:
+                    tmp_cursor.execute(statement, arg)
+                tmp_connection.commit()
+                tmp_connection.close()
 
         except sqlite3.Error as e:
             print(tu.now_as_text(), 'sqlite3 error', e.args[0], file=sys.stderr)
@@ -199,8 +210,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
     # 最新のbids(asks)をセレクトして返す
     # str table_name ('bids' or 'asks')
+    # str sort ('desc' or 'asc')
     # unixtime t1, t2
-    def __select_from_latest_bids_or_asks(self, table_name, t1, t2):
+    # integer lim
+    def __select_from_latest_bids_or_asks(self, table_name, t1, t2, sort, lim):
         # bids/asksテーブルにはスナップショットと差分情報を格納している
         # timestampが新しいレコードを抽出して使うようにすれば最新の板情報となる
         statement = '''
@@ -210,19 +223,22 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 where timestamp >= :t1 and timestamp <= :t2 
                 group by price 
                 order by timestamp
-            ) order by price;
-        ''' % (table_name, table_name)
-        return self.query(statement, {'t1': t1, 't2': t2})
+            ) order by price %s limit :lim;
+        ''' % (table_name, table_name, sort)
+
+        return self.query(statement, {'t1': t1, 't2': t2, 'lim':lim})
         
 
     # unixtime t1, t2
-    def read_latest_bids_filtered_by_timestamp(self, t1, t2):
-        return self.__select_from_latest_bids_or_asks('bids', t1, t2)
+    def read_latest_bids_filtered_by_timestamp(self, t1, t2, limit=1000):
+        # 最高値(best bid)からlimit件までを返す
+        return self.__select_from_latest_bids_or_asks('bids', t1, t2, 'desc', limit)
 
 
     # unixtime t1, t2
-    def read_latest_asks_filtered_by_timestamp(self, t1, t2):
-        return self.__select_from_latest_bids_or_asks('asks', t1, t2)
+    def read_latest_asks_filtered_by_timestamp(self, t1, t2, limit=1000):
+        # 最安値(best ask)からlimit件までを返す
+        return self.__select_from_latest_bids_or_asks('asks', t1, t2, 'asc', limit)
 
         
     # dict ticker
@@ -251,11 +267,13 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
     # unixtime t
     def read_latest_ticker(self, t):
+        # tick_idを除く全カラム
         statement = '''
-            select * from ticker 
-            where timestamp <= :timestamp order by timestamp desc limit 1;
+            select timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product 
+            from ticker 
+            where timestamp <= :t order by timestamp desc limit 1;
         '''
-        return self.query(statement, {'timestamp': t})
+        return self.query(statement, {'t': t})
 
 
     def read_min_max_timestamp_of_ticker(self):

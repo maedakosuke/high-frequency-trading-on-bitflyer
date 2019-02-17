@@ -54,8 +54,8 @@ class Strategy:
         # latest ticker
         ticker = self.__exchange.get_latest_ticker(t)
         # update bids, asks
-        self.__exchange.reconstruct_bids(0, t)
-        self.__exchange.reconstruct_asks(0, t)
+        self.__exchange.reconstruct_bids(t-1000, t)
+        self.__exchange.reconstruct_asks(t-1000, t)
         
         if buy_size > sell_size:
             # 時刻tでのbest askを得る
