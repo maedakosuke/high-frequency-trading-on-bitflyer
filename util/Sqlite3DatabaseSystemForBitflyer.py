@@ -271,7 +271,9 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         statement = '''
             select timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product 
             from ticker 
-            where timestamp <= :t order by timestamp desc limit 1;
+            where timestamp <= :t 
+            order by timestamp desc 
+            limit 1;
         '''
         return self.query(statement, {'t': t})
 
@@ -281,6 +283,18 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             select min(timestamp), max(timestamp) from ticker;
         '''
         return self.query(statement)
+
+
+    # unixtime t1, t2
+    def read_ticker_filtered_by_timestamp(self, t1, t2):
+        # tick_idを除く全カラム
+        statement = '''
+            select timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product 
+            from ticker 
+            where timestamp >= :t1 and timestamp <= :t2 
+            order by timestamp;
+        '''
+        return self.query(statement, {'t1':t1, 't2':t2})
 
 
 

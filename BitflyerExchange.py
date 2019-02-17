@@ -103,6 +103,12 @@ class BitflyerExchange:
         return self.asks[self.asks['size']>0]['price'].min()
 
 
+    # unixtime t1-t2間のtickerを返す
+    def get_ticker(self, t1, t2):
+        ticker = self.__dbsystem.read_ticker_filtered_by_timestamp(t1, t2)
+        return pd.DataFrame(ticker)
+
+
 if __name__ == '__main__':
     dbfile_path = 'C:/workspace/test.sqlite3'
     exchange = BitflyerExchange(dbfile_path)
@@ -137,22 +143,22 @@ if __name__ == '__main__':
 
 
     # best bid, best ask time dependency
-    t1 = tu.time_as_unixtime('2019-02-10 13:30:00.000000') - 9*60*60
-    t2 = tu.time_as_unixtime('2019-02-10 16:00:00.000000') - 9*60*60
-
-    best_bid = []
-    best_ask = []
-    timestamps = []
-    for i, t in enumerate(np.arange(t1, t2, 600)):
-        print(i, tu.time_as_text(t))
-        exchange.reconstruct_bids(0, t)
-        exchange.reconstruct_asks(0, t)
-        timestamps.append(t)
-        best_bid.append(exchange.best_bid_in_constructed_bids())
-        best_ask.append(exchange.best_ask_in_constructed_asks())
-        
-    df = pd.DataFrame(timestamps, best_bid, best_ask, columns=['t', 'bid', 'ask'])
+#    t1 = tu.time_as_unixtime('2019-02-10 13:30:00.000000') - 9*60*60
+#    t2 = tu.time_as_unixtime('2019-02-10 16:00:00.000000') - 9*60*60
+#    best_bid = []
+#    best_ask = []
+#    timestamps = []
+#    for i, t in enumerate(np.arange(t1, t2, 600)):
+#        print(i, tu.time_as_text(t))
+#        exchange.reconstruct_bids(0, t)
+#        exchange.reconstruct_asks(0, t)
+#        timestamps.append(t)
+#        best_bid.append(exchange.best_bid_in_constructed_bids())
+#        best_ask.append(exchange.best_ask_in_constructed_asks())
+#        
+#    df = pd.DataFrame(timestamps, best_bid, best_ask, columns=['t', 'bid', 'ask'])
     
-    
+    # ticker読み込みテスト2
+    ticker = exchange.get_ticker(tmin, tmax)
     
     

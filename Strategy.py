@@ -9,6 +9,7 @@ mmbotxxxのストラテジーを移植する
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 import util.cnst as cnst
 import util.timeutil as tu
@@ -61,7 +62,7 @@ class Strategy:
             # 時刻tでのbest askを得る
 #            best_ask = ticker['best_ask'][0]
             best_ask = self.__exchange.best_ask_in_constructed_asks()
-            if best_ask is None:
+            if best_ask is None or best_ask == 0:
                 return
             # 指値を決定する
             order_price = best_ask - self.params['profitspread']
@@ -75,7 +76,7 @@ class Strategy:
             # 時刻tでのbest bidを得る
 #            best_bid = ticker['best_bid'][0]
             best_bid = self.__exchange.best_bid_in_constructed_bids()
-            if best_bid is None:
+            if best_bid is None or best_bid == 0:
                 return
             # 指値を決定する
             order_price = best_bid + self.params['profitspread']
@@ -89,17 +90,18 @@ class Strategy:
         return position    
     
     
-def total_btc(positions):
-    return (positions['side'] * positions['size']).sum()
+def total_btc(positions, n):
+    return (positions['side'] * positions['size']).head(n).sum()
 
 
-def total_jpy(positions):
-    return (positions['price'] * (-1 * positions['side']) * positions['size']).sum()
+def total_jpy(positions, n):
+    return (positions['price'] * (-1 * positions['side']) * positions['size']).head(n).sum()
 
 
-def summarize_asset(positions):
-    btc = total_btc(positions)
-    jpy = total_jpy(positions)
+def final_asset(positions):
+    n = len(positions)
+    btc = total_btc(positions, n)
+    jpy = total_jpy(positions, n)
     ltp = positions[-1:]['price'].values[0]
     asset = jpy + ltp * btc
     print('total btc    :', btc, '[BTC]')
@@ -107,6 +109,16 @@ def summarize_asset(positions):
     print('ltp          :', ltp, '[JPY]')
     print('asset        :', asset, '[JPY]')
     
+
+def asset(positions, n):
+    btc = total_btc(positions, n)
+    jpy = total_jpy(positions, n)
+    ltp = positions.iloc[n-1]['price']
+    return jpy + ltp * btc
+
+
+#def plot_position():
+
 
 if __name__ == '__main__':
     dbfile_path = 'C:/workspace/test.sqlite3'
@@ -131,9 +143,30 @@ if __name__ == '__main__':
         position = strategy.order(t)
         if position is not None:
             positions.append(position)
-        print(str(position))
+        print(position)
         
     positions = pd.DataFrame(positions)
-    summarize_asset(positions)
+    positions_execution_fail = positions[positions.side==0]
+    positions = positions[positions.side!=0]
+    assets=[asset(positions, n) for n in range(1,len(positions)+1)]
+    positions['asset'] = pd.Series(assets, index=positions.index)
+    final_asset(positions)
 
+    
+    fig = plt.figure(figsize=(6,4), dpi=300)
+    ax = fig.add_subplot(1,1,1)
+    ax.set_title('title')
+    ax.set_xlabel('timestamp')
+    ax.set_ylabel('size')
+    #    ax.set_xlim([380000, 381000])
+    ax.set_ylim([-2500, 7500])
+#    ax.plot((positions['timestamp']-positions['timestamp'].min())/3600, positions['buy_size'],  c='red', label='buy size 15s')
+#    ax.plot((positions['timestamp']-positions['timestamp'].min())/3600, positions['sell_size'], c='blue', label='sell size 15s')
+    ax.plot((positions.timestamp-positions.timestamp.min())/3600, positions.asset, c='black', label='asset')
+    ax.legend()
+    fig.savefig('C:/workspace/out.png')
 
+    # 投資指標のヒストグラム
+    plt.hist(positions.buy_size - positions.sell_size, bins=int(len(positions)**0.5))
+    plt.hist(positions.buy_size**0.5 - positions.sell_size**0.5, bins=int(len(positions)**0.5))
+    
