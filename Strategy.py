@@ -135,7 +135,7 @@ if __name__ == '__main__':
     exchange = BitflyerExchange(dbfile_path)
     tmin, tmax = exchange.get_time_range_of_ticker()
     
-    dt = 60
+    dt = 1
     positions = []
     for i, t in enumerate(np.arange(tmin, tmax, dt)):
         print('----------*----------*----------*----------')
