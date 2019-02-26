@@ -8,14 +8,11 @@ from time import sleep
 import threading
 import websocket
 
-
 LOG_FILE_PATH = 'lightning_executions_FX_BTC_JPY.json'
 
 PRODUCT = 'FX_BTC_JPY'
 
-volume = {
-    'time': datetime.now()
-}
+volume = {'time': datetime.now()}
 
 
 # start RealtimeAPI for volume check
@@ -26,30 +23,27 @@ def on_message(ws, message):
         f.write(',\n')
 
     global volume
-    volume = {
-      'time': datetime.now()
-    }
+    volume = {'time': datetime.now()}
 
 
 def on_close_and_error(ws, error):
     print(format(error))
     global volume
-    volume = {
-        'time': datetime.now()
-    }
+    volume = {'time': datetime.now()}
     ws.close
     sys.exit(1)
     pass
 
 
 def on_open(ws):
-    ws.send(json.dumps(
-        {
+    ws.send(
+        json.dumps({
             'method': 'subscribe',
-            'params': { 'channel' : 'lightning_executions_%s' % PRODUCT},
+            'params': {
+                'channel': 'lightning_executions_%s' % PRODUCT
+            },
             'id': None
-        }
-    ))
+        }))
 
 
 def websockets_bitflyer():
@@ -57,10 +51,11 @@ def websockets_bitflyer():
         print('WebSocket Connection Open')
         # set true to debug
         websocket.enableTrace(False)
-        ws = websocket.WebSocketApp('wss://ws.lightstream.bitflyer.com/json-rpc',
-                                    on_message = on_message,
-                                    on_error = on_close_and_error,
-                                    on_close = on_close_and_error)
+        ws = websocket.WebSocketApp(
+            'wss://ws.lightstream.bitflyer.com/json-rpc',
+            on_message=on_message,
+            on_error=on_close_and_error,
+            on_close=on_close_and_error)
         ws.on_open = on_open
         return ws
 
@@ -103,7 +98,7 @@ def reconnect():
 
 
 if __name__ == '__main__':
-    
+
     global ws, wst
     ws = websockets_bitflyer()
     wst = threading.Thread(target=ws.run_forever)

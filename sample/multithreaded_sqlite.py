@@ -15,21 +15,22 @@ import time
 class MultiThreadOK(Thread):
     def __init__(self, db):
         super(MultiThreadOK, self).__init__()
-        self.db=db
-        self.reqs=Queue()
+        self.db = db
+        self.reqs = Queue()
         self.start()
 
     def run(self):
-        cnx = sqlite3.Connection(self.db) 
+        cnx = sqlite3.Connection(self.db)
         cursor = cnx.cursor()
         while True:
             req = self.reqs.get()
-            if req=='--close--': 
+            if req == '--close--':
                 break
-            elif req=='--commit--': 
+            elif req == '--commit--':
                 cnx.commit()
             try:
-                cursor.executescript(req) if ';' in req else cursor.execute(req)
+                cursor.executescript(req) if ';' in req else cursor.execute(
+                    req)
             except sqlite3.OperationalError as err:
                 print('Error {0}'.format(err))
                 print('Comando: {0}'.format(req))
@@ -68,23 +69,25 @@ class MultiThreadOK(Thread):
         self.execute('--close--')
 
 
-if __name__=='__main__':
-    db='people.db'
-    sql=MultiThreadOK(db)
+if __name__ == '__main__':
+    db = 'people.db'
+    sql = MultiThreadOK(db)
     sql.execute("create table people(name,first)")
     sql.execute("insert into people (name,first) values('Czabania','George')")
     sql.commit()
     sql.execute("insert into people (name,first) values('Cooper','Jono')")
     sql.commit()
-    sql.execute("insert into people (name,first) values('Wick','John');insert into people values('Anderson','Thomas');")
+    sql.execute(
+        "insert into people (name,first) values('Wick','John');insert into people values('Anderson','Thomas');"
+    )
     sql.commit()
     #much more efficient way to do bulk Inserts and Updates to the DB
-    sql.execute("BEGIN TRANSACTION;INSERT INTO people (name,first) values ('Smith','John');INSERT INTO people values ('Anderson','Thomas');COMMIT;")
+    sql.execute(
+        "BEGIN TRANSACTION;INSERT INTO people (name,first) values ('Smith','John');INSERT INTO people values ('Anderson','Thomas');COMMIT;"
+    )
     for q in sql.select("select * from people"):
         print(q)
     #wait until all write are done to read all updated data
     while sql.queries() > 0:
         time.sleep(5)
     sql.close()
-    
-    
