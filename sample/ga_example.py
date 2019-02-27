@@ -1,4 +1,4 @@
-#  -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Created on Fri Feb 22 21:11:00 2019
 
@@ -106,9 +106,9 @@ def eval_backtest(individual):
             pos = 'none'
 
     # テスト結果
-    pal = float(total_prof + total_loss)
-    pf = float(total_prof / (-total_loss))
-    wp = float(count_prof / (count_prof + count_loss))
+    pal = float(total_prof + total_loss)  # リターン Profit and Loss
+    pf = float(total_prof / (-total_loss))  # プロフィットファクター
+    wp = float(count_prof / (count_prof + count_loss))  # 勝率
 
     # 適応度にする指標を返り値として設定
     return pal,
