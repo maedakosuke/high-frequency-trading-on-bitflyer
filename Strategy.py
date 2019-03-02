@@ -21,12 +21,8 @@ class Strategy:
         self.__exchange = BitflyerExchange(sqlite3_file_path)
         self.params = {}
 
-
-#        self.position = {}
-
-# unixtime tでの指値side, price, sizeを決定する
-# 約定した場合はポジションを返す
-
+    # unixtime tでの指値side, price, sizeを決定する
+    # 約定した場合はポジションを返す
     def order(self, t):
         # 過去deltatime[sec]間のbuy/sellのサイズを集計する
         t_dt_ago = t - self.params['deltatime']
@@ -142,9 +138,6 @@ def calc_return(exchange, positions, dt):
     return return_list
 
 
-return_list = calc_return(exchange, positions, 60)
-
-#def plot_position():
 
 if __name__ == '__main__':
     dbfile_path = 'C:/workspace/test.sqlite3'
@@ -161,7 +154,7 @@ if __name__ == '__main__':
     exchange = BitflyerExchange(dbfile_path)
     tmin, tmax = exchange.get_time_range_of_ticker()
 
-    dt = 1
+    dt = 60
     positions = []
     for i, t in enumerate(np.arange(tmin, tmax, dt)):
         print('----------*----------*----------*----------')

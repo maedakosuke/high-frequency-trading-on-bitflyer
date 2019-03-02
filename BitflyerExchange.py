@@ -16,7 +16,10 @@ from util.Sqlite3DatabaseSystemForBitflyer import Sqlite3DatabaseSystemForBitfly
 
 class BitflyerExchange:
     def __init__(self, sqlite3_file_path):
+        # ロードに時間がかかるがその後のDBのselectクエリを高速化するために
+        # 全テーブルをメモリにロードする (メモリ使用量に注意)
         self.__dbsystem = Sqlite3DatabaseSystemForBitflyer(sqlite3_file_path)
+        self.__dbsystem.use_inmemory_connection_to_select()
 
     # 時刻t1-t2の間の約定履歴を提供する
     # unixtime t1, t2
