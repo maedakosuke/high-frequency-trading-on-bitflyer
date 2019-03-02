@@ -112,7 +112,7 @@ class BitflyerRealtimeMessenger:
 if __name__ == '__main__':
 
     product = 'FX_BTC_JPY'
-    dbfile_path = 'C:/workspace/test.sqlite3'
+    dbfile_path = 'C:/workspace/bf20190302.sqlite3'
 
     start_time = tu.now_as_unixtime()
 

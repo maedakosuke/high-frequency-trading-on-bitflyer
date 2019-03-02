@@ -5,6 +5,7 @@ import threading
 import sys
 import util.cnst as cnst
 import util.timeutil as tu
+from io import StringIO
 
 
 def side_as_int(text):
@@ -17,10 +18,41 @@ def side_as_int(text):
 
 
 def dict_factory(cursor, row):
+    """
+        sqlite3のselectクエリのリターンをdict型にする
+    """
     d = {}
     for idx, col in enumerate(cursor.description):
         d[col[0]] = row[idx]
     return d
+
+
+def create_inmemory_sqlit3_connection(db_name):
+    """
+        sqlite3データベースdb_nameを
+        メモリーにロードして接続を返す
+    """
+    print(
+        tu.now_as_text(),
+        "start loading sqlite3 :memory: connection from",
+        db_name)
+    # Read database to tempfile
+    tempcon = sqlite3.connect(db_name)
+    tempfile = StringIO()
+    for line in tempcon.iterdump():
+        tempfile.write('%s\n' % line)
+    tempcon.close()
+    tempfile.seek(0)
+
+    # Create a database in memory and import from tempfile
+    memcon = sqlite3.connect(":memory:")
+    memcon.cursor().executescript(tempfile.read())
+    memcon.commit()
+    memcon.row_factory = sqlite3.Row
+
+    print(tu.now_as_text(), "end loading sqlite3 :memory:")
+
+    return memcon
 
 
 class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
@@ -30,7 +62,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         # selectクエリ用の常時接続インスタンス
         self.__steady_connection = sqlite3.connect(
             self.__db_file_path, check_same_thread=False)
-        self.__steady_connection.row_factory = dict_factory  # use dict, not tupple
+        self.__steady_connection.row_factory = dict_factory
         self.__steady_cursor = self.__steady_connection.cursor()
 
         # create tables if not exist
@@ -38,6 +70,15 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         self.__create_bids_table()
         self.__create_asks_table()
         self.__create_ticker_table()
+
+    def use_inmemory_connection_to_select(self):
+        """
+            selectクエリを高速化するためにinmemory接続を使用する
+        """
+        self.__steady_connection = create_inmemory_sqlit3_connection(
+                self.__db_file_path)
+        self.__steady_connection.row_factory = dict_factory
+        self.__steady_cursor = self.__steady_connection.cursor()
 
     # str statement, dict arg
     def query(self, statement, arg=None):
@@ -71,7 +112,8 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 tu.now_as_text(), 'sqlite3 error', e.args[0], file=sys.stderr)
 
     def __create_executions_table(self):
-        statement = '''
+        self.query(
+            '''
             create table if not exists executions (
                 id integer,
                 exec_date real,
@@ -80,40 +122,49 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 size real,
                 primary key (id, exec_date)
             );
-        '''
-        self.query(statement)
+            ''')
+        self.query('create index if not exists exec_t on executions (exec_date);')
 
     def __create_bids_table(self):
-        statement = '''
+        self.query(
+            '''
             create table if not exists bids (
                 timestamp real,
                 price real,
                 size real,
                 primary key (timestamp, price)
             );
-        '''
-        self.query(statement)
+
+            ''')
+        self.query('create index if not exists bids_t on bids (timestamp);')
+        self.query('create index if not exists bids_p on bids (price);')
+        self.query('create index if not exists bids_tp on bids (timestamp, price);')
 
     def __create_asks_table(self):
-        statement = '''
+        self.query(
+            '''
             create table if not exists asks (
                 timestamp real,
                 price real,
                 size real,
                 primary key (timestamp, price)
             );
-        '''
-        self.query(statement)
+
+            ''')
+        self.query('create index if not exists asks_t on asks (timestamp);')
+        self.query('create index if not exists asks_p on asks (price);')
+        self.query('create index if not exists asks_tp on asks (timestamp, price);')
 
     def __create_ticker_table(self):
-        statement = '''
+        self.query(
+            '''
             create table if not exists ticker (
                 tick_id integer,
                 timestamp real,
                 best_bid real,
                 best_ask real,
                 best_bid_size real,
-                best_ask_size real,                
+                best_ask_size real,
                 total_bid_depth real,
                 total_ask_depth real,
                 ltp real,
@@ -121,8 +172,8 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 volume_by_product real,
                 primary key (tick_id, timestamp)
             );
-        '''
-        self.query(statement)
+            ''')
+        self.query('create index if not exists ticker_t on ticker (timestamp);')
 
     # dict message
     def add_message_to_db(self, message):
@@ -147,12 +198,12 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # dict executions
     def __write_executions(self, executions):
         statement = '''
-            insert into executions 
+            insert into executions
                 (id, exec_date, side, price, size)
-            values 
+            values
                 (:id, :exec_date, :side, :price, :size)
             on conflict (id, exec_date)
-            do update set 
+            do update set
                 side=excluded.side, price=excluded.price, size=excluded.size;
         '''
         for execution in executions:
@@ -169,8 +220,8 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # unixtime t1, t2
     def read_executions_filtered_by_exec_date(self, t1, t2):
         statement = '''
-            select id, exec_date, side, price, size from executions 
-            where exec_date >= :t1 and exec_date <= :t2 
+            select id, exec_date, side, price, size from executions
+            where exec_date >= :t1 and exec_date <= :t2
             order by id, exec_date;
         '''
         return self.query(statement, {'t1': t1, 't2': t2})
@@ -179,12 +230,12 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # dict record
     def __insert_into_bids_or_asks(self, table_name, t, price, size):
         statement = '''
-            insert into %s 
+            insert into %s
                 (timestamp, price, size)
-            values 
+            values
                 (:t, :p, :s)
             on conflict (timestamp, price)
-            do update set 
+            do update set
                 size=excluded.size;
         ''' % table_name
         self.query(statement, {'t': t, 'p': price, 's': size})
@@ -212,11 +263,11 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         # bids/asksテーブルにはスナップショットと差分情報を格納している
         # timestampが新しいレコードを抽出して使うようにすれば最新の板情報となる
         statement = '''
-            select timestamp, price, size from %s 
+            select timestamp, price, size from %s
             where rowid in (
-                select max(rowid) from %s 
-                where timestamp >= :t1 and timestamp <= :t2 
-                group by price 
+                select max(rowid) from %s
+                where timestamp >= :t1 and timestamp <= :t2
+                group by price
                 order by timestamp
             ) order by price %s limit :lim;
         ''' % (table_name, table_name, sort)
@@ -238,9 +289,9 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # dict ticker
     def __write_ticker(self, ticker):
         statement = '''
-            insert into ticker 
+            insert into ticker
                 (tick_id, timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product)
-            values 
+            values
                 (:tick_id, :timestamp, :best_bid, :best_ask, :best_bid_size, :best_ask_size, :total_bid_depth, :total_ask_depth, :ltp, :volume, :volume_by_product);
         '''
         record = {
@@ -262,10 +313,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def read_latest_ticker(self, t):
         # tick_idを除く全カラム
         statement = '''
-            select timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product 
-            from ticker 
-            where timestamp <= :t 
-            order by timestamp desc 
+            select timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product
+            from ticker
+            where timestamp <= :t
+            order by timestamp desc
             limit 1;
         '''
         return self.query(statement, {'t': t})
@@ -280,9 +331,9 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def read_ticker_filtered_by_timestamp(self, t1, t2):
         # tick_idを除く全カラム
         statement = '''
-            select timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product 
-            from ticker 
-            where timestamp >= :t1 and timestamp <= :t2 
+            select timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product
+            from ticker
+            where timestamp >= :t1 and timestamp <= :t2
             order by timestamp;
         '''
         return self.query(statement, {'t1': t1, 't2': t2})
