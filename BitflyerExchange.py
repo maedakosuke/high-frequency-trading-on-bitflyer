@@ -7,7 +7,6 @@ Created on Sun Feb  3 11:22:40 2019
 約定にかかるタイムロスは0
 """
 
-import numpy as np
 import pandas as pd
 import util.cnst as cnst
 import util.timeutil as tu
@@ -30,58 +29,17 @@ class BitflyerExchange:
 
     # スナップショットと差分情報から時刻tの時点のbidsデータを構成する
     # unixtime t1, t2
-    def reconstruct_bids(self, t1, t2):
+    def construct_bids(self, t1, t2):
         self.bids = pd.DataFrame(
             self.__dbsystem.read_latest_bids_filtered_by_timestamp(t1, t2))
         print('bids size: %s (%s - %s)' % (self.bids.size, t1, t2))
 
     # スナップショットと差分情報から時刻tの時点のbidsデータを構成する
     # unixtime t1, t2
-    def reconstruct_asks(self, t1, t2):
+    def construct_asks(self, t1, t2):
         self.asks = pd.DataFrame(
             self.__dbsystem.read_latest_asks_filtered_by_timestamp(t1, t2))
         print('asks size: %s (%s - %s)' % (self.asks.size, t1, t2))
-
-    # 指値注文を受け付ける
-    # datetime date, int side, float price, size
-    # 約定した場合は約定結果のdictを返す
-    # 簡単のためにdictではなくboolを返す
-    def limit_order(self, side, price, size):
-        if self.bids.empty or self.asks.empty:
-            print('limit_order() bids/asks empty')
-            return
-
-        if side == cnst.BUY:
-            # buy limit orderなので上限以下のasksを参照する
-            # 指値より安く買える場合は約定する
-            df = self.asks[(self.asks['price'] <= price)
-                           & (self.asks['size'] > 0)]
-            # debug
-            print('limit_order() filtered-asks sum(size)', df['size'].sum())
-        elif side == cnst.SELL:
-            # sell limit orderなので下限以上のbidsを参照する
-            # 指値より高く売れる場合は約定する
-            df = self.bids[(self.bids['price'] >= price)
-                           & (self.bids['size'] > 0)]
-            # debug
-            print('limit_order() filtered-bids sum(size)', df['size'].sum())
-        else:
-            return
-        # 約定に足りるだけのsizeがある場合は約定成功
-        return df['size'].sum() >= size
-
-    # unixtime tより過去の最も新しいティッカーを返す
-    def get_latest_ticker(self, t):
-        ticker = self.__dbsystem.read_latest_ticker(t)
-        return pd.DataFrame(ticker)
-
-    # tickerテーブルのtimestampの範囲を返す
-    def get_time_range_of_ticker(self):
-        tminmax = pd.DataFrame(
-            self.__dbsystem.read_min_max_timestamp_of_ticker())
-        tmin = tminmax['min(timestamp)'][0]
-        tmax = tminmax['max(timestamp)'][0]
-        return tmin, tmax
 
     # self.bids内のbest bidを返す
     def best_bid_in_constructed_bids(self):
@@ -97,14 +55,55 @@ class BitflyerExchange:
             return
         return self.asks[self.asks['size'] > 0]['price'].min()
 
+    # 指値注文を受け付ける
+    # datetime date, int side, float price, size
+    # 約定した場合は約定結果のdictを返す
+    # 簡単のためにdictではなくboolを返す
+    def limit_order(self, side, price, size):
+        if side == cnst.BUY:
+            if self.asks.empty:
+                print('limit_order() asks empty')
+                return
+            # buy limit orderなので上限以下のasksを参照する
+            # 指値より安く買える場合は約定する
+            df = self.asks[(self.asks.price <= price) & (self.asks.size > 0)]
+            # debug
+            print('limit_order() filtered-asks sum(size)', df.size.sum())
+        elif side == cnst.SELL:
+            if self.bids.empty:
+                print('limit_order() bids empty')
+                return
+            # sell limit orderなので下限以上のbidsを参照する
+            # 指値より高く売れる場合は約定する
+            df = self.bids[(self.bids.price >= price) & (self.bids.size > 0)]
+            # debug
+            print('limit_order() filtered-bids sum(size)', df.size.sum())
+        else:
+            return
+        # 約定に足りるだけのsizeがある場合は約定成功
+        return df.size.sum() >= size
+
     # unixtime t1-t2間のtickerを返す
     def get_ticker(self, t1, t2):
         ticker = self.__dbsystem.read_ticker_filtered_by_timestamp(t1, t2)
         return pd.DataFrame(ticker)
 
+    # unixtime tより過去の最も新しいティッカーを返す
+    def get_latest_ticker(self, t):
+        ticker = pd.DataFrame(self.__dbsystem.read_latest_ticker(t))
+        return ticker.iloc[0]
+
+    # tickerテーブルのtimestampの範囲を返す
+    def get_time_range_of_ticker(self):
+        tminmax = pd.DataFrame(
+            self.__dbsystem.read_min_max_timestamp_of_ticker())
+        tmin = tminmax['min(timestamp)'][0]
+        tmax = tminmax['max(timestamp)'][0]
+        return tmin, tmax
+
 
 if __name__ == '__main__':
-    dbfile_path = 'C:/workspace/test.sqlite3'
+    dbfile_path = 'C:/workspace/bf20190302.sqlite3'
     exchange = BitflyerExchange(dbfile_path)
 
     # executions読み込みテスト
@@ -115,8 +114,8 @@ if __name__ == '__main__':
     # bids, asks構成テスト
     t1 = tu.time_as_unixtime('2019-02-01 10:30:00.000000')
     t2 = tu.time_as_unixtime('2019-02-10 15:10:00.000000')  # UTC timezzone
-    exchange.reconstruct_bids(0, t2 - 9 * 60 * 60)
-    exchange.reconstruct_asks(0, t2 - 9 * 60 * 60)
+    exchange.construct_bids(0, t2 - 9 * 60 * 60)
+    exchange.construct_asks(0, t2 - 9 * 60 * 60)
     bids = exchange.bids
     asks = exchange.asks
     best_bid = exchange.best_bid_in_constructed_bids()

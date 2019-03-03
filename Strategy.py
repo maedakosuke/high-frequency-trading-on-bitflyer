@@ -11,187 +11,171 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from BitflyerExchange import BitflyerExchange
 import util.cnst as cnst
 import util.timeutil as tu
-from BitflyerExchange import BitflyerExchange
+import util.plotutil as pu
 
+dbfile_path = 'C:/workspace/bf20190302.sqlite3'
+exchange = BitflyerExchange(dbfile_path)
+tmin, tmax = exchange.get_time_range_of_ticker()
 
-class Strategy:
-    def __init__(self, sqlite3_file_path):
-        self.__exchange = BitflyerExchange(sqlite3_file_path)
-        self.params = {}
+# mmbotxxxのストラテジーの移植
+# unixtime tでの指値side, price, sizeを決定する
+# ポジションを返す
+def simulate_trade(params, t):
+    # return value
+    position = pd.Series({
+        'order_time': t,  # 注文時刻 unixtime [s]
+        'exec_size': None,  # 約定数
+        'exec_buy_size': None,  # 約定の積算買い注文サイズ [BTC]
+        'exec_sell_size': None,  # 約上の積算売り注文サイズ [BTC]
+        'invest_index': None,  # 投資指標 [BTC]^0.5
+        'order_side': None,  # cnst.BUY:買い注文 cnst.SELL:売り注文
+        'order_price': None,  # 注文金額 [JPY]
+        'order_size': None,  # 注文サイズ [BTC]
+        'close_time': None,  # 注文精算時刻 unixtime [s]
+        'close_side': None,  # 注文の反対取引 cnst.BUY:買い, cnst.SELL:売り
+        'close_price': None,  # 注文精算金額 [JPY]
+        'pnl': None,          # 損益 [JPY]
+        })
+    # 積算時間のbuy/sellのサイズを集計する
+    executions = exchange.get_executions(t - params.integral_time, t)
+    if executions.empty:
+        print('order() executions empty')
+        return position
+    else:
+        print('order() executions.size', executions.size)
+    buy_size = executions[executions.side == cnst.BUY].size.sum()
+    sell_size = executions[executions.side == cnst.SELL].size.sum()
 
-    # unixtime tでの指値side, price, sizeを決定する
-    # 約定した場合はポジションを返す
-    def order(self, t):
-        # 過去deltatime[sec]間のbuy/sellのサイズを集計する
-        t_dt_ago = t - self.params['deltatime']
-        executions = self.__exchange.get_executions(t_dt_ago, t)
-        if executions.empty:
-            print('order() executions empty')
-            return
-        else:
-            print('order() executions.size', executions.size)
-        buy_size = executions[executions['side'] == cnst.BUY]['size'].sum()
-        sell_size = executions[executions['side'] == cnst.SELL]['size'].sum()
-        # buyとsellの2乗差の絶対値を計算する
-        delta_d = abs(buy_size**0.5 - sell_size**0.5)
-        print('order() buy_size', buy_size, 'sell_size', sell_size, 'delta_d',
-              delta_d)
-        # フィルタを通らない場合は注文しない
-        if delta_d <= self.params['orderfilter']:
-            print('order() delta_d <= orderfileter')
-            return
-        # return value
-        position = {
-            'timestamp': t,
-            'buy_size': buy_size,
-            'sell_size': sell_size,
-            'delta_d': delta_d,
-            'side': 0,
-            'price': 0,
-            'size': 0
-        }
-        # latest ticker
-        ticker = self.__exchange.get_latest_ticker(t)
-        # update bids, asks
-        self.__exchange.reconstruct_bids(t - 1000, t)
-        self.__exchange.reconstruct_asks(t - 1000, t)
+    # buyとsellの2乗差の絶対値(Absolute Square Diff.)(投資指標i.i.)を計算する
+    asd = abs(buy_size**0.5 - sell_size**0.5)
+    print('order() buy_size', buy_size, 'sell_size', sell_size, 'i.i.', asd)
 
-        if buy_size > sell_size:
-            # 時刻tでのbest askを得る
-            #            best_ask = ticker['best_ask'][0]
-            best_ask = self.__exchange.best_ask_in_constructed_asks()
-            if best_ask is None or best_ask == 0:
-                return
-            # 指値を決定する
-            order_price = best_ask - self.params['profitspread']
-            # 買いの指値注文をする
-            is_execution = self.__exchange.limit_order(
-                cnst.BUY, order_price, self.params['ordersize'])
-            if is_execution:
-                position['side'] = cnst.BUY
-                position['price'] = order_price
-                position['size'] = self.params['ordersize']
-        else:
-            # 時刻tでのbest bidを得る
-            #            best_bid = ticker['best_bid'][0]
-            best_bid = self.__exchange.best_bid_in_constructed_bids()
-            if best_bid is None or best_bid == 0:
-                return
-            # 指値を決定する
-            order_price = best_bid + self.params['profitspread']
-            # 売りの指値注文をする
-            is_execution = self.__exchange.limit_order(
-                cnst.SELL, order_price, self.params['ordersize'])
-            if is_execution:
-                position['side'] = cnst.SELL
-                position['price'] = order_price
-                position['size'] = self.params['ordersize']
+    position.exec_size = executions.size
+    position.exec_buy_size = buy_size
+    position.exec_sell_size = sell_size
+    position.invest_index = asd
 
+    # フィルタを通らない場合は注文しない
+    if asd < params.filter_low or params.filter_high < asd:
+        print('order() investment index does not pass the filter')
         return position
 
+    # t時点の板情報をDBから構成する
+    exchange.construct_bids(t - 1000, t)
+    exchange.construct_asks(t - 1000, t)
+    # 注文判定
+    if buy_size > sell_size:
+        # 時刻tでのbest askを得る
+        best_ask = exchange.best_ask_in_constructed_asks()
+        if best_ask is None or best_ask == 0:
+            return position
+        # 指値を決定する
+        order_price = best_ask - params.profit_spread
+        # 買いの指値注文をする
+        is_execution = exchange.limit_order(
+            cnst.BUY, order_price, params.order_size)
+        if is_execution:
+            position.order_side = cnst.BUY
+            position.order_price = order_price
+            position.order_size = params.order_size
+    else:
+        # 時刻tでのbest bidを得る
+        best_bid = exchange.best_bid_in_constructed_bids()
+        if best_bid is None or best_bid == 0:
+            return position
+        # 指値を決定する
+        order_price = best_bid + params.profit_spread
+        # 売りの指値注文をする
+        is_execution = exchange.limit_order(
+            cnst.SELL, order_price, params.order_size)
+        if is_execution:
+            position.order_side = cnst.SELL
+            position.order_price = order_price
+            position.order_size = params.order_size
 
-def total_btc(positions, n):
-    return (positions['side'] * positions['size']).head(n).sum()
+    # 成行注文で反対取引をする
+    # TODO この反対取引も注文と同じように板情報を再構成したほうが良い?
+    tc = t + params.close_time
+    ticker = exchange.get_latest_ticker(tc)
+    if abs(ticker.timestamp - tc) > 60:
+        # 取引失敗
+        print('order() failed to close the position')
+        return position
+    position.close_time = ticker.timestamp
+    if position.order_side == cnst.BUY:
+        position.close_side = cnst.SELL
+        position.close_price = ticker.best_bid
+    elif position.order_side == cnst.SELL:
+        position.close_side = cnst.BUY
+        position.close_price = ticker.best_ask
 
+    # 損益計算
+    position.pnl = position.order_size * position.order_side * (position.close_price - position.order_price)
 
-def total_jpy(positions, n):
-    return (positions['price'] * (-1 * positions['side']) *
-            positions['size']).head(n).sum()
-
-
-def final_asset(positions):
-    n = len(positions)
-    btc = total_btc(positions, n)
-    jpy = total_jpy(positions, n)
-    ltp = positions[-1:]['price'].values[0]
-    asset = jpy + ltp * btc
-    print('total btc    :', btc, '[BTC]')
-    print('total jpy    :', jpy, '[JPY]')
-    print('ltp          :', ltp, '[JPY]')
-    print('asset        :', asset, '[JPY]')
-
-
-def asset(positions, n):
-    btc = total_btc(positions, n)
-    jpy = total_jpy(positions, n)
-    ltp = positions.iloc[n - 1]['price']
-    return jpy + ltp * btc
-
-
-# ポジションを持ったdt秒後に反対取引をしてポジションをクローズする
-# 計算した損益を返す
-def calc_return(exchange, positions, dt):
-    return_list = []
-    for index, position in positions.iterrows():
-        print(index, tu.time_as_text(position.timestamp))
-        close_time = position.timestamp + dt
-        ticker = exchange.get_latest_ticker(close_time)
-        if position.side == cnst.BUY:
-            close_price = ticker['best_ask'][0]
-        elif position.side == cnst.SELL:
-            close_price = ticker['best_bid'][0]
-        return_value = (
-            close_price - position.price) * position.side * position.size
-        return_list.append(return_value)
-    return return_list
-
+    return position
 
 
 if __name__ == '__main__':
-    dbfile_path = 'C:/workspace/test.sqlite3'
-    strategy = Strategy(dbfile_path)
-    strategy.params = {
-        'ordersize': 0.01,  # [BTC]
-        'deltatime': 15,  # [s]
-        'orderfilter': 0,  # [BTC]^0.5
-        'profitspread': -20,  # [JPY]
-        'orderbreak': 0,  # [s] 未使用
-        'loopinterval': 0,  # [s] 未使用
-    }
+    params = pd.Series({
+        'order_size': 0.01,  # 注文サイズ [BTC]
+        'integral_time': 15,  # 投資指標(約定履歴)の積算時間 [s]
+        'filter_low': 0,  # 注文判定に使用する投資指標の閾値Low [BTC]^0.5
+        'filter_high': 200,  # 閾値High [BTC]^0.5
+        'profit_spread': 0,  # 注文金額のbest bid/askからの差 [JPY]
+        'close_time': 60,  # closetime秒後に反対取引をしてポジションを精算する [s]
+    })
+    tstart = tmin  # 計算の開始時刻 unixtime [s]
+    tend = tmax  # 計算の終了時刻 unixtime [s]
+    tstep = 60  # 取引の時間間隔 [s]
 
-    exchange = BitflyerExchange(dbfile_path)
-    tmin, tmax = exchange.get_time_range_of_ticker()
-
-    dt = 60
-    positions = []
-    for i, t in enumerate(np.arange(tmin, tmax, dt)):
+    positions = pd.DataFrame()
+    for i, t in enumerate(np.arange(tstart, tend, tstep)):
         print('----------*----------*----------*----------')
         print(i, tu.time_as_text(t))
-        position = strategy.order(t)
-        if position is not None:
-            positions.append(position)
-        print(position)
+        position = simulate_trade(params, t)
+        positions = positions.append(position, ignore_index=True)
 
-    positions = pd.DataFrame(positions)
-    positions_execution_fail = positions[positions.side == 0]
-    positions = positions[positions.side != 0]
-    assets = [asset(positions, n) for n in range(1, len(positions) + 1)]
-    positions['asset'] = pd.Series(assets, index=positions.index)
-    final_asset(positions)
+    # 成功取引のみ抽出
+    p = positions[~positions.close_side.isnull()]
 
-    fig = plt.figure(figsize=(6, 4), dpi=300)
-    ax = fig.add_subplot(1, 1, 1)
-    ax.set_title('title')
-    ax.set_xlabel('timestamp')
-    ax.set_ylabel('size')
-    #    ax.set_xlim([380000, 381000])
-    ax.set_ylim([-2500, 7500])
-    #    ax.plot((positions['timestamp']-positions['timestamp'].min())/3600, positions['buy_size'],  c='red', label='buy size 15s')
-    #    ax.plot((positions['timestamp']-positions['timestamp'].min())/3600, positions['sell_size'], c='blue', label='sell size 15s')
-    ax.plot(
-        (positions.timestamp - positions.timestamp.min()) / 3600,
-        positions.asset,
-        c='black',
-        label='asset')
-    ax.legend()
-    fig.savefig('C:/workspace/out.png')
+    # 投資指標vsリターン散布図
+    pu.plot_scatter(p.exec_buy_size**0.5 - p.exec_sell_size**0.5, p.pnl, False)
 
     # 投資指標のヒストグラム
     plt.hist(
-        positions.buy_size - positions.sell_size,
-        bins=int(len(positions)**0.5))
-    plt.hist(
-        positions.buy_size**0.5 - positions.sell_size**0.5,
-        bins=int(len(positions)**0.5))
+        p.exec_buy_size**0.5 - p.exec_sell_size**0.5,
+        bins=int(len(p)**0.5))
+
+    # 資産曲線 unixtime vs JPY
+    asset = [p.pnl.head(n).sum() for n in range(len(p))]
+    plt.plot(p.order_time, asset)
+    # 最終資産
+    print("asset", p.pnl.sum(), "[JPY]")
+
+
+
+#    positions = positions[positions.order_side is not None]
+#    assets = [asset(positions, n) for n in range(1, len(positions) + 1)]
+#    positions['asset'] = pd.Series(assets, index=positions.index)
+#    final_asset(positions)
+#
+#    fig = plt.figure(figsize=(6, 4), dpi=300)
+#    ax = fig.add_subplot(1, 1, 1)
+#    ax.set_title('title')
+#    ax.set_xlabel('timestamp')
+#    ax.set_ylabel('size')
+#    #    ax.set_xlim([380000, 381000])
+#    ax.set_ylim([-2500, 7500])
+#    #    ax.plot((positions['timestamp']-positions['timestamp'].min())/3600, positions['buy_size'],  c='red', label='buy size 15s')
+#    #    ax.plot((positions['timestamp']-positions['timestamp'].min())/3600, positions['sell_size'], c='blue', label='sell size 15s')
+#    ax.plot(
+#        (positions.timestamp - positions.timestamp.min()) / 3600,
+#        positions.asset,
+#        c='black',
+#        label='asset')
+#    ax.legend()
+#    fig.savefig('C:/workspace/out.png')
+#

@@ -71,10 +71,10 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         self.__create_asks_table()
         self.__create_ticker_table()
 
+    # selectクエリを高速化するためにinmemory接続を使用する
+    # DBが大きいとロードに時間がかかる
     def use_inmemory_connection_to_select(self):
-        """
-            selectクエリを高速化するためにinmemory接続を使用する
-        """
+        self.__steady_connection.close()
         self.__steady_connection = create_inmemory_sqlit3_connection(
                 self.__db_file_path)
         self.__steady_connection.row_factory = dict_factory
@@ -207,7 +207,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 side=excluded.side, price=excluded.price, size=excluded.size;
         '''
         for execution in executions:
-            #           print(execution)
+            # print(execution)
             record = {
                 'id': execution['id'],
                 'exec_date': tu.text_to_unixtime(execution['exec_date']),
