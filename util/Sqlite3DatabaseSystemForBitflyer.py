@@ -266,7 +266,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             select timestamp, price, size from %s
             where rowid in (
                 select max(rowid) from %s
-                where timestamp >= :t1 and timestamp <= :t2
+                where timestamp >= :t1 and timestamp <= :t2 and size > 0
                 group by price
                 order by timestamp
             ) order by price %s limit :lim;

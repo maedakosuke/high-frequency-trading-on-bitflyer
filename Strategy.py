@@ -124,7 +124,7 @@ if __name__ == '__main__':
         'integral_time': 15,  # 投資指標(約定履歴)の積算時間 [s]
         'filter_low': 0,  # 注文判定に使用する投資指標の閾値Low [BTC]^0.5
         'filter_high': 200,  # 閾値High [BTC]^0.5
-        'profit_spread': 0,  # 注文金額のbest bid/askからの差 [JPY]
+        'profit_spread': 1,  # 注文金額のbest bid/askからの差 [JPY]
         'close_time': 60,  # closetime秒後に反対取引をしてポジションを精算する [s]
     })
     tstart = tmin  # 計算の開始時刻 unixtime [s]

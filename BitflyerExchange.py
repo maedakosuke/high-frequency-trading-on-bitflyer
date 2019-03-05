@@ -46,14 +46,14 @@ class BitflyerExchange:
         if self.bids.empty:
             print('best_bid_in_constructed_bids() bids empty')
             return
-        return self.bids[self.bids['size'] > 0]['price'].max()
+        return self.bids.price.max()
 
     # self.asks内のbest askを返す
     def best_ask_in_constructed_asks(self):
         if self.asks.empty:
             print('best_ask_in_constructed_asks() asks empty')
             return
-        return self.asks[self.asks['size'] > 0]['price'].min()
+        return self.asks.price.min()
 
     # 指値注文を受け付ける
     # datetime date, int side, float price, size
@@ -66,7 +66,7 @@ class BitflyerExchange:
                 return
             # buy limit orderなので上限以下のasksを参照する
             # 指値より安く買える場合は約定する
-            df = self.asks[(self.asks.price <= price) & (self.asks.size > 0)]
+            df = self.asks[self.asks.price <= price]
             # debug
             print('limit_order() filtered-asks sum(size)', df.size.sum())
         elif side == cnst.SELL:
@@ -75,7 +75,7 @@ class BitflyerExchange:
                 return
             # sell limit orderなので下限以上のbidsを参照する
             # 指値より高く売れる場合は約定する
-            df = self.bids[(self.bids.price >= price) & (self.bids.size > 0)]
+            df = self.bids[self.bids.price >= price]
             # debug
             print('limit_order() filtered-bids sum(size)', df.size.sum())
         else:
