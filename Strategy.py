@@ -42,16 +42,19 @@ def simulate_trade(params, t):
     # 積算時間のbuy/sellのサイズを集計する
     executions = exchange.get_executions(t - params.integral_time, t)
     if executions.empty:
-        print('order() executions empty')
+        #print('order() executions empty')
         return position
     else:
-        print('order() executions.size', executions.size)
-    buy_size = executions[executions.side == cnst.BUY].size.sum()
-    sell_size = executions[executions.side == cnst.SELL].size.sum()
+        #print('order() executions.size', executions.size)
+        pass
+    buy_size = executions[executions.side == cnst.BUY]['size'].sum()
+    sell_size = executions[executions.side == cnst.SELL]['size'].sum()
+    #buy_size = executions[executions.side == cnst.BUY].size
+    #sell_size = executions[executions.side == cnst.SELL].size
 
     # buyとsellの2乗差の絶対値(Absolute Square Diff.)(投資指標i.i.)を計算する
     asd = abs(buy_size**0.5 - sell_size**0.5)
-    print('order() buy_size', buy_size, 'sell_size', sell_size, 'i.i.', asd)
+    #print('order() buy_size', buy_size, 'sell_size', sell_size, 'i.i.', asd)
 
     position.exec_size = executions.size
     position.exec_buy_size = buy_size
@@ -60,7 +63,7 @@ def simulate_trade(params, t):
 
     # フィルタを通らない場合は注文しない
     if asd < params.filter_low or params.filter_high < asd:
-        print('order() investment index does not pass the filter')
+        #print('order() investment index does not pass the filter')
         return position
 
     # t時点の板情報をDBから構成する
@@ -98,24 +101,41 @@ def simulate_trade(params, t):
 
     # 成行注文で反対取引をする
     # TODO この反対取引も注文と同じように板情報を再構成したほうが良い?
-    tc = t + params.close_time
-    ticker = exchange.get_latest_ticker(tc)
-    if abs(ticker.timestamp - tc) > 60:
-        # 取引失敗
-        print('order() failed to close the position')
-        return position
-    position.close_time = ticker.timestamp
-    if position.order_side == cnst.BUY:
-        position.close_side = cnst.SELL
-        position.close_price = ticker.best_bid
-    elif position.order_side == cnst.SELL:
-        position.close_side = cnst.BUY
-        position.close_price = ticker.best_ask
-
-    # 損益計算
-    position.pnl = position.order_size * position.order_side * (position.close_price - position.order_price)
+    if is_execution:
+        tc = t + params.close_time
+        ticker = exchange.get_latest_ticker(tc)
+        if abs(ticker.timestamp - tc) > 10:
+            # 取引失敗
+            #print('order() failed to close the position')
+            return position
+        position.close_time = ticker.timestamp
+        if position.order_side == cnst.BUY:
+            position.close_side = cnst.SELL
+            position.close_price = ticker.best_bid
+        elif position.order_side == cnst.SELL:
+            position.close_side = cnst.BUY
+            position.close_price = ticker.best_ask
+        # 損益計算
+        position.pnl = position.order_size * position.order_side * (position.close_price - position.order_price)
 
     return position
+
+
+# paramsを入力して最終損益を計算する
+# dict params
+def total_asset(params):
+    tstart = tmin  # 計算の開始時刻 unixtime [s]
+    tend = tmax  # 計算の終了時刻 unixtime [s]
+    tstep = 60  # 取引の時間間隔 [s]
+
+    positions = pd.DataFrame()
+    for i, t in enumerate(np.arange(tstart, tend, tstep)):
+        position = simulate_trade(pd.Series(params), t)
+        positions = positions.append(position, ignore_index=True)
+
+    # 成功取引のみ抽出
+    p = positions[~positions.close_side.isnull()]
+    return p.pnl.sum()
 
 
 if __name__ == '__main__':
@@ -124,7 +144,7 @@ if __name__ == '__main__':
         'integral_time': 15,  # 投資指標(約定履歴)の積算時間 [s]
         'filter_low': 0,  # 注文判定に使用する投資指標の閾値Low [BTC]^0.5
         'filter_high': 200,  # 閾値High [BTC]^0.5
-        'profit_spread': 1,  # 注文金額のbest bid/askからの差 [JPY]
+        'profit_spread': 0,  # 注文金額のbest bid/askからの差 [JPY]
         'close_time': 60,  # closetime秒後に反対取引をしてポジションを精算する [s]
     })
     tstart = tmin  # 計算の開始時刻 unixtime [s]
@@ -142,7 +162,7 @@ if __name__ == '__main__':
     p = positions[~positions.close_side.isnull()]
 
     # 投資指標vsリターン散布図
-    pu.plot_scatter(p.exec_buy_size**0.5 - p.exec_sell_size**0.5, p.pnl, False)
+    pu.plot_scatter(-p.exec_buy_size**0.5 + p.exec_sell_size**0.5, p.pnl, False)
 
     # 投資指標のヒストグラム
     plt.hist(

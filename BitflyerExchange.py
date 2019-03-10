@@ -32,26 +32,26 @@ class BitflyerExchange:
     def construct_bids(self, t1, t2):
         self.bids = pd.DataFrame(
             self.__dbsystem.read_latest_bids_filtered_by_timestamp(t1, t2))
-        print('bids size: %s (%s - %s)' % (self.bids.size, t1, t2))
+        #print('bids size: %s (%s - %s)' % (self.bids.size, t1, t2))
 
     # スナップショットと差分情報から時刻tの時点のbidsデータを構成する
     # unixtime t1, t2
     def construct_asks(self, t1, t2):
         self.asks = pd.DataFrame(
             self.__dbsystem.read_latest_asks_filtered_by_timestamp(t1, t2))
-        print('asks size: %s (%s - %s)' % (self.asks.size, t1, t2))
+        #print('asks size: %s (%s - %s)' % (self.asks.size, t1, t2))
 
     # self.bids内のbest bidを返す
     def best_bid_in_constructed_bids(self):
         if self.bids.empty:
-            print('best_bid_in_constructed_bids() bids empty')
+            #print('best_bid_in_constructed_bids() bids empty')
             return
         return self.bids.price.max()
 
     # self.asks内のbest askを返す
     def best_ask_in_constructed_asks(self):
         if self.asks.empty:
-            print('best_ask_in_constructed_asks() asks empty')
+            #print('best_ask_in_constructed_asks() asks empty')
             return
         return self.asks.price.min()
 
@@ -62,26 +62,26 @@ class BitflyerExchange:
     def limit_order(self, side, price, size):
         if side == cnst.BUY:
             if self.asks.empty:
-                print('limit_order() asks empty')
+                #print('limit_order() asks empty')
                 return
             # buy limit orderなので上限以下のasksを参照する
             # 指値より安く買える場合は約定する
             df = self.asks[self.asks.price <= price]
             # debug
-            print('limit_order() filtered-asks sum(size)', df.size.sum())
+            #print('limit_order() filtered-asks sum(size)', df['size'].sum())
         elif side == cnst.SELL:
             if self.bids.empty:
-                print('limit_order() bids empty')
+                #print('limit_order() bids empty')
                 return
             # sell limit orderなので下限以上のbidsを参照する
             # 指値より高く売れる場合は約定する
             df = self.bids[self.bids.price >= price]
             # debug
-            print('limit_order() filtered-bids sum(size)', df.size.sum())
+            #print('limit_order() filtered-bids sum(size)', df['size'].sum())
         else:
             return
         # 約定に足りるだけのsizeがある場合は約定成功
-        return df.size.sum() >= size
+        return df['size'].sum() >= size
 
     # unixtime t1-t2間のtickerを返す
     def get_ticker(self, t1, t2):
