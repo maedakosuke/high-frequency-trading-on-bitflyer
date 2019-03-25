@@ -61,7 +61,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
 
         # selectクエリ用の常時接続インスタンス
         self.__steady_connection = sqlite3.connect(
-            self.__db_file_path, check_same_thread=False)
+            self.__db_file_path, check_same_thread=False, isolation_level=None)
         self.__steady_connection.row_factory = dict_factory
         self.__steady_cursor = self.__steady_connection.cursor()
 
@@ -97,7 +97,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
             else:
                 # insert/updateクエリは都度接続したほうがdatabase is lockedエラーが少ない
                 tmp_connection = sqlite3.connect(
-                    self.__db_file_path, check_same_thread=False)
+                    self.__db_file_path, check_same_thread=False, isolation_level=None)
                 tmp_connection.row_factory = dict_factory  # use dict, not tupple
                 tmp_cursor = tmp_connection.cursor()
                 if arg is None:
@@ -110,6 +110,24 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         except sqlite3.Error as e:
             print(
                 tu.now_as_text(), 'sqlite3 error', e.args[0], file=sys.stderr)
+
+
+    def insert_many(self, statement, arg):
+        try:
+            statement = statement.strip()  # 両端の空白を消去する
+            # insert/updateクエリは都度接続したほうがdatabase is lockedエラーが少ない
+            tmp_connection = sqlite3.connect(
+                self.__db_file_path, check_same_thread=False)
+            tmp_connection.row_factory = dict_factory  # use dict, not tupple
+            tmp_cursor = tmp_connection.cursor()
+            tmp_cursor.executemany(statement, arg)
+            tmp_connection.commit()
+            tmp_connection.close()
+
+        except sqlite3.Error as e:
+            print(
+                tu.now_as_text(), 'sqlite3 error', e.args[0], file=sys.stderr)
+
 
     def __create_executions_table(self):
         self.query(
@@ -181,22 +199,22 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         message_body = message['params']['message']  # dict
 
         if channel_name == 'lightning_executions_FX_BTC_JPY':
-            self.__write_executions(message_body)
+            self.write_executions(message_body)
 
         elif channel_name == 'lightning_ticker_FX_BTC_JPY':
-            self.__write_ticker(message_body)
+            self.write_ticker(message_body)
 
         elif channel_name == 'lightning_board_snapshot_FX_BTC_JPY':
-            self.__write_orderbook(message_body)
+            self.write_orderbook(message_body)
 
         elif channel_name == 'lightning_board_FX_BTC_JPY':
-            self.__write_orderbook(message_body)
+            self.write_orderbook(message_body)
 
         else:
             pass
 
     # dict executions
-    def __write_executions(self, executions):
+    def write_executions(self, executions):
         statement = '''
             insert into executions
                 (id, exec_date, side, price, size)
@@ -216,6 +234,29 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 'size': execution['size']
             }
             self.query(statement, record)
+
+    def write_executions_many(self, executions):
+        statement = '''
+            insert into executions
+                (id, exec_date, side, price, size)
+            values
+                (:id, :exec_date, :side, :price, :size)
+            on conflict (id, exec_date)
+            do update set
+                side=excluded.side, price=excluded.price, size=excluded.size;
+        '''
+        records = []
+        for execution in executions:
+            # print(execution)
+            record = {
+                'id': execution['id'],
+                'exec_date': tu.text_to_unixtime(execution['exec_date']),
+                'side': side_as_int(execution['side']),
+                'price': execution['price'],
+                'size': execution['size']
+            }
+            records.append(record)
+        self.insert_many(statement, records)
 
     # unixtime t1, t2
     def read_executions_filtered_by_exec_date(self, t1, t2):
@@ -241,18 +282,57 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
         self.query(statement, {'t': t, 'p': price, 's': size})
 
     # dict orderbook
-    def __write_orderbook(self, orderbook):
+    def write_orderbook(self, orderbook):
         now = tu.now_as_unixtime()
         # orderbook['mid_price']はtickerと重複するので記憶しない
         for bid in orderbook['bids']:
             #            print(bid)
-            self.__insert_into_bids_or_asks('bids', now, bid['price'],
-                                            bid['size'])
+            self.__insert_into_bids_or_asks(
+                'bids', now, bid['price'], bid['size'])
 
         for ask in orderbook['asks']:
             #            print(ask)
-            self.__insert_into_bids_or_asks('asks', now, ask['price'],
-                                            ask['size'])
+            self.__insert_into_bids_or_asks(
+                'asks', now, ask['price'], ask['size'])
+
+
+    def write_bids_many(self, bids):
+        statement = '''
+            insert into bids
+                (timestamp, price, size)
+            values
+                (:timestamp, :price, :size)
+            on conflict (timestamp, price)
+            do update set
+                size=excluded.size;
+        '''
+        now = tu.now_as_unixtime()
+        # orderbook['mid_price']はtickerと重複するので記憶しない
+        # bids
+        records = []
+        for bid in bids:
+            record = {'timestamp': now, 'price': bid['price'], 'size': bid['size']}
+            records.append(record)
+        self.insert_many(statement, records)
+
+    def write_asks_many(self, asks):
+        statement = '''
+            insert into asks
+                (timestamp, price, size)
+            values
+                (:timestamp, :price, :size)
+            on conflict (timestamp, price)
+            do update set
+                size=excluded.size;
+        '''
+        now = tu.now_as_unixtime()
+        # orderbook['mid_price']はtickerと重複するので記憶しない
+        records = []
+        for ask in asks:
+            record = {'timestamp': now, 'price': ask['price'], 'size': ask['size']}
+            records.append(record)
+        self.insert_many(statement, records)
+
 
     # 最新のbids(asks)をセレクトして返す
     # str table_name ('bids' or 'asks')
@@ -287,7 +367,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                                                       limit)
 
     # dict ticker
-    def __write_ticker(self, ticker):
+    def write_ticker(self, ticker):
         statement = '''
             insert into ticker
                 (tick_id, timestamp, best_bid, best_ask, best_bid_size, best_ask_size, total_bid_depth, total_ask_depth, ltp, volume, volume_by_product)
