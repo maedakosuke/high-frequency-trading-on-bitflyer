@@ -23,7 +23,7 @@ class BitflyerRealtimeMessenger:
     def initialize_websocket(self):
         try:
             # set true to debug
-            websocket.enableTrace(False)
+            websocket.enableTrace(True)
             print(
                 tu.now_as_text(),
                 self.__channel,
@@ -111,8 +111,12 @@ class BitflyerRealtimeMessenger:
 
 if __name__ == '__main__':
 
+    if len(sys.argv) != 2:
+        print('Usage: sqlite3_database_file_path')
+        exit(1)
+
     product = 'FX_BTC_JPY'
-    dbfile_path = 'C:/workspace/bf20190302.sqlite3'
+    dbfile_path = sys.argv[1]
 
     start_time = tu.now_as_unixtime()
 

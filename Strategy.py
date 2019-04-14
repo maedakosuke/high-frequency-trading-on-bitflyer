@@ -16,7 +16,7 @@ import util.cnst as cnst
 import util.timeutil as tu
 import util.plotutil as pu
 
-dbfile_path = 'C:/workspace/bf20190302.sqlite3'
+dbfile_path = 'C:/workspace/test.sqlite3'
 exchange = BitflyerExchange(dbfile_path)
 tmin, tmax = exchange.get_time_range_of_ticker()
 
@@ -141,20 +141,21 @@ def total_asset(params):
 if __name__ == '__main__':
     params = pd.Series({
         'order_size': 0.01,  # 注文サイズ [BTC]
-        'integral_time': 15,  # 投資指標(約定履歴)の積算時間 [s]
+        'integral_time': 60,  # 投資指標(約定履歴)の積算時間 [s]
         'filter_low': 0,  # 注文判定に使用する投資指標の閾値Low [BTC]^0.5
-        'filter_high': 200,  # 閾値High [BTC]^0.5
+        'filter_high': 100,  # 閾値High [BTC]^0.5
         'profit_spread': 0,  # 注文金額のbest bid/askからの差 [JPY]
         'close_time': 60,  # closetime秒後に反対取引をしてポジションを精算する [s]
     })
     tstart = tmin  # 計算の開始時刻 unixtime [s]
     tend = tmax  # 計算の終了時刻 unixtime [s]
-    tstep = 60  # 取引の時間間隔 [s]
+    tstep = 120  # 取引の時間間隔 [s]
 
     positions = pd.DataFrame()
     for i, t in enumerate(np.arange(tstart, tend, tstep)):
-        print('----------*----------*----------*----------')
-        print(i, tu.time_as_text(t))
+        if i % 60 == 0:
+            print('----------*----------*----------*----------')
+            print(i, tu.time_as_text(t))
         position = simulate_trade(params, t)
         positions = positions.append(position, ignore_index=True)
 
@@ -162,19 +163,27 @@ if __name__ == '__main__':
     p = positions[~positions.close_side.isnull()]
 
     # 投資指標vsリターン散布図
-    pu.plot_scatter(-p.exec_buy_size**0.5 + p.exec_sell_size**0.5, p.pnl, False)
+    pu.plot_scatter(p.exec_buy_size**0.5 - p.exec_sell_size**0.5, p.pnl, False)
+    pu.plot_scatter(p.exec_buy_size - p.exec_sell_size, p.pnl, False)
+
+    pu.plot_scatter(p.exec_buy_size**0.5, p.pnl, False)
+    pu.plot_scatter(p.exec_sell_size**0.5, p.pnl, False)
 
     # 投資指標のヒストグラム
-    plt.hist(
-        p.exec_buy_size**0.5 - p.exec_sell_size**0.5,
-        bins=int(len(p)**0.5))
+    plt.hist(p.exec_buy_size**0.5 - p.exec_sell_size**0.5, bins=int(len(p)**0.5))
+
+    plt.hist( p.exec_buy_size - p.exec_sell_size, bins=int(len(p)**0.5))
+
+    plt.hist(p.pnl, bins=int(len(p)**0.5))
 
     # 資産曲線 unixtime vs JPY
     asset = [p.pnl.head(n).sum() for n in range(len(p))]
-    plt.plot(p.order_time, asset)
-    # 最終資産
+    plt.scatter(p.order_time, asset, 1)    # 最終資産
     print("asset", p.pnl.sum(), "[JPY]")
 
+    # P.F.
+    pf = -1 * p[p.pnl>0].pnl.sum() / p[p.pnl<0].pnl.sum()
+    print(pf)
 
 
 #    positions = positions[positions.order_side is not None]

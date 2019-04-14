@@ -25,12 +25,12 @@ import websocket
 # parameter
 bitflyer_params = {
     'order_size': 0.01,
-    'integral_time': 30,
-    'filter_low': 1,
-    'filter_high': 8,
-    'profit_spread': -20,
+    'integral_time': 60,
+    'filter_low': 9,
+    #'filter_high': 100,
+    'profit_spread': 0,
     'order_cancel_time': 1,
-    'close_time': 120,
+    'close_time': 60,
     'loop_interval': 0,
 }
 
@@ -163,7 +163,7 @@ def close_order(api, product, close_time):
     current_time = datetime.utcnow().timestamp()  # UTC unixtime
     for position in positions:
         order_time = parse(position['open_date']).timestamp()
-        if order_time + close_time >= current_time:
+        if order_time + close_time <= current_time:
             print('close the position:', position)
             if position['side'] == 'BUY':
                 close_side = 'SELL'
@@ -216,9 +216,9 @@ if __name__ == '__main__':
                   (bitflyer_params['integral_time'], buy_volume, sell_volume))
 
             # (2) Caluculate Total volume
-            difference = abs(buy_volume**0.5 - sell_volume**0.5)
-            print('%dsec Volume - Difference %f' %
-                  (bitflyer_params['integral_time'], difference))
+            #difference = abs(buy_volume**0.5 - sell_volume**0.5)
+            #print('%dsec Volume - Difference %f' %
+            #      (bitflyer_params['integral_time'], difference))
 
             # (3) get exchange status (HTTP public API)
             current_status = api.gethealth(product_code=PRODUCT)['status']
@@ -229,31 +229,33 @@ if __name__ == '__main__':
                   (bids_and_asks['bids'][0]['price'],
                    bids_and_asks['asks'][0]['price']))
 
-            if bitflyer_params['filter_low'] <= difference and bitflyer_params['filter_high'] >= difference and current_status in ok_status:
+            if current_status in ok_status:
                 order_size = bitflyer_params['order_size']
-                if buy_volume > sell_volume:
+                if buy_volume > sell_volume and bitflyer_params['filter_low'] <= buy_volume**0.5:
                     order_price = bids_and_asks['bids'][0][
                         'price'] - bitflyer_params['profit_spread']
                     order_side = 'BUY'
-                else:
+                elif buy_volume < sell_volume and bitflyer_params['filter_low'] <= sell_volume**0.5:
                     order_price = bids_and_asks['asks'][0][
                         'price'] + bitflyer_params['profit_spread']
                     order_side = 'SELL'
+                else:
+                    order_side = 'NO'
 
                 # (5) send a new order (HTTP privte API)
-                api.sendchildorder(
-                    product_code=PRODUCT,
-                    child_order_type='LIMIT',
-                    side=order_side,
-                    price=order_price,
-                    size=order_size)
-                print('%s  Order   - Price %f Size %f' %
-                      (order_side, order_price, order_size))
-
-                # (6) cancel all orders
-                sleep(bitflyer_params['order_cancel_time'])
-                api.cancelallchildorders(product_code=PRODUCT)
-                print('Open Order Canceled\n')
+                if order_side == 'BUY' or order_side == 'SELL':
+                    api.sendchildorder(
+                        product_code=PRODUCT,
+                        child_order_type='LIMIT',
+                        side=order_side,
+                        price=order_price,
+                        size=order_size)
+                    print('%s  Order   - Price %f Size %f' %
+                          (order_side, order_price, order_size))
+                    # (6) cancel all orders
+                    sleep(bitflyer_params['order_cancel_time'])
+                    api.cancelallchildorders(product_code=PRODUCT)
+                    print('Open Order Canceled\n')
             else:
                 print('No Order Posted\n')
 

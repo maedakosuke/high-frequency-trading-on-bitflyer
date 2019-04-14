@@ -138,6 +138,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 side integer,
                 price real,
                 size real,
+                recieve_time real,
                 primary key (id, exec_date)
             );
             ''')
@@ -217,13 +218,14 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     def write_executions(self, executions):
         statement = '''
             insert into executions
-                (id, exec_date, side, price, size)
+                (id, exec_date, side, price, size, recieve_time)
             values
-                (:id, :exec_date, :side, :price, :size)
+                (:id, :exec_date, :side, :price, :size, :recieve_time)
             on conflict (id, exec_date)
             do update set
                 side=excluded.side, price=excluded.price, size=excluded.size;
         '''
+        now = tu.now_as_unixtime();
         for execution in executions:
             # print(execution)
             record = {
@@ -231,20 +233,22 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 'exec_date': tu.text_to_unixtime(execution['exec_date']),
                 'side': side_as_int(execution['side']),
                 'price': execution['price'],
-                'size': execution['size']
+                'size': execution['size'],
+                'recieve_time': now
             }
             self.query(statement, record)
 
     def write_executions_many(self, executions):
         statement = '''
             insert into executions
-                (id, exec_date, side, price, size)
+                (id, exec_date, side, price, size, recieve_time)
             values
-                (:id, :exec_date, :side, :price, :size)
+                (:id, :exec_date, :side, :price, :size, :recieve_time)
             on conflict (id, exec_date)
             do update set
                 side=excluded.side, price=excluded.price, size=excluded.size;
         '''
+        now = tu.now_as_unixtime()
         records = []
         for execution in executions:
             # print(execution)
@@ -253,7 +257,8 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
                 'exec_date': tu.text_to_unixtime(execution['exec_date']),
                 'side': side_as_int(execution['side']),
                 'price': execution['price'],
-                'size': execution['size']
+                'size': execution['size'],
+                'recieve_time': now
             }
             records.append(record)
         self.insert_many(statement, records)
@@ -261,7 +266,7 @@ class Sqlite3DatabaseSystemForBitflyer(threading.Thread):
     # unixtime t1, t2
     def read_executions_filtered_by_exec_date(self, t1, t2):
         statement = '''
-            select id, exec_date, side, price, size from executions
+            select id, exec_date, side, price, size, recieve_time from executions
             where exec_date >= :t1 and exec_date <= :t2
             order by id, exec_date;
         '''
