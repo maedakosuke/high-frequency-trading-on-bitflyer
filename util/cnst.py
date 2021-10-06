@@ -14,8 +14,8 @@ SERVER_STATUS = ['NORMAL', 'BUSY', 'VERY BUSY']
 # secrets
 # Label: exclude_in_and_out_money
 # bitFlyer Lightning API
-API_KEY_BF = "9KMDohNkN98E3R3PNxpR3A"
-API_SECRET_BF = "FHeL+SZp6KgIAgCEnmIPJZIxYuYtjAHf42JZqBxPEWk="
+API_KEY_BF = "9KMXohNkN98X3R3PNxpR3X"
+API_SECRET_BF = "FHeL+SZp6KgIAgCXnmIPJZIxYuYtjAXf42JZqBxPEWX="
 PRODUCT = 'FX_BTC_JPY'
 
 def side_as_int(text):
